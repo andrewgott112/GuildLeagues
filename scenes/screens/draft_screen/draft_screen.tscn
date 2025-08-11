@@ -1,0 +1,128 @@
+[gd_scene load_steps=3 format=3 uid="uid://clkxlibhd72fq"]
+
+[ext_resource type="Script" uid="uid://c7gd0j0nod7l4" path="res://scenes/screens/draft_screen/DraftScreen.gd" id="1_y6fby"]
+[ext_resource type="Texture2D" uid="uid://b4wuvsf0wihqd" path="res://resources/gradient.tres" id="2_xmusp"]
+
+[node name="DraftScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_y6fby")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_xmusp")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Column" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Column/Header"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Draft"
+
+[node name="Spacer" type="Control" parent="Margin/Column/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OnClock" type="Label" parent="Margin/Column/Header"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+text = "On the clock: You"
+horizontal_alignment = 2
+
+[node name="PicksRemaining" type="Label" parent="Margin/Column/Header"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "Your picks left: 3"
+horizontal_alignment = 2
+
+[node name="BodyPanel" type="Panel" parent="Margin/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="BodyVBox" type="VBoxContainer" parent="Margin/Column/BodyPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="ProspectScroll" type="ScrollContainer" parent="Margin/Column/BodyPanel/BodyVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+horizontal_scroll_mode = 0
+
+[node name="ListPad" type="MarginContainer" parent="Margin/Column/BodyPanel/BodyVBox/ProspectScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="ProspectList" type="VBoxContainer" parent="Margin/Column/BodyPanel/BodyVBox/ProspectScroll/ListPad"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="Footer" type="HBoxContainer" parent="Margin/Column"]
+custom_minimum_size = Vector2(44, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="FinishBtn" type="Button" parent="Margin/Column/Footer"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 16
+disabled = true
+text = "Finish Draft"
+
+[node name="FooterSpacer" type="Control" parent="Margin/Column/Footer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RerollBtn" type="Button" parent="Margin/Column/Footer"]
+layout_mode = 2
+disabled = true
+text = "Reroll Pool (-2g)"
+
+[node name="CancelBtn" type="Button" parent="Margin/Column/Footer"]
+layout_mode = 2
+disabled = true
+text = "Cancel"
+
+[node name="AIPickTimer" type="Timer" parent="."]
+wait_time = 0.5
+one_shot = true

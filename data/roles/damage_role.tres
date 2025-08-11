@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RoleResource" load_steps=2 format=3 uid="uid://bdvuv1lqnup6l"]
+
+[ext_resource type="Script" uid="uid://ben78r8ug06v0" path="res://resources/Role.gd" id="1_rkslh"]
+
+[resource]
+script = ExtResource("1_rkslh")
+id = &"damage"
+display_name = "Damage"
+base_attack = 9
+base_defense = 5
+base_hp = 12
+role_stat_name = &"Hunt"
+base_role_stat = 3

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RoleResource" load_steps=2 format=3 uid="uid://dbkp73aphuivx"]
+
+[ext_resource type="Script" uid="uid://ben78r8ug06v0" path="res://resources/Role.gd" id="1_36lfo"]
+
+[resource]
+script = ExtResource("1_36lfo")
+id = &"tank"
+display_name = "Tank"
+base_attack = 4
+base_defense = 9
+base_hp = 20
+role_stat_name = &"Guard"
+base_role_stat = 3

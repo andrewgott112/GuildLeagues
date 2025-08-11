@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RoleResource" load_steps=2 format=3 uid="uid://cr4wriupkr2ab"]
+
+[ext_resource type="Script" uid="uid://ben78r8ug06v0" path="res://resources/Role.gd" id="1_wih0h"]
+
+[resource]
+script = ExtResource("1_wih0h")
+id = &"navigator"
+display_name = "Navigator"
+base_attack = 5
+base_defense = 8
+base_hp = 14
+role_stat_name = &"Navigation"
+base_role_stat = 4

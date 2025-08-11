@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="RoleResource" load_steps=2 format=3 uid="uid://dtpxdojtgkah7"]
+
+[ext_resource type="Script" uid="uid://ben78r8ug06v0" path="res://resources/Role.gd" id="1_tsexs"]
+
+[resource]
+script = ExtResource("1_tsexs")
+id = &"healer"
+display_name = "Healer"
+base_attack = 3
+base_defense = 6
+base_hp = 15
+role_stat_name = &"Medicine"
+base_role_stat = 4
