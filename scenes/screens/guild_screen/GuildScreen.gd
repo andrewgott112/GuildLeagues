@@ -5,6 +5,7 @@ extends Control
 @onready var roster_list: VBoxContainer = $Margin/Column/RosterPanel/MarginContainer/RosterPanelVBox/RosterScroll/RosterList
 
 @onready var btn_to_draft: Button = $Margin/Column/BottomBar/ToDraft
+@onready var btn_to_dungeons: Button = $Margin/Column/BottomBar/ToDungeon
 @onready var btn_save: Button     = $Margin/Column/BottomBar/SaveBtn
 @onready var btn_menu: Button     = $Margin/Column/BottomBar/ToMenu
 
@@ -22,6 +23,7 @@ func _ready() -> void:
 
 func _wire_buttons() -> void:
 	btn_to_draft.pressed.connect(_on_to_draft)
+	btn_to_dungeons.pressed.connect(_on_to_dungeons)
 	btn_save.pressed.connect(_on_save_pressed)
 	btn_menu.pressed.connect(_on_main_menu)
 
@@ -46,15 +48,28 @@ func _phase_text() -> String:
 		return "Draft"
 	elif Game.phase == Game.Phase.GUILD:
 		return "Guild"
+	elif Game.phase == Game.Phase.DUNGEONS:
+		return "Dungeons"
 	else:
 		return "—"
 
-
 func _refresh_cta() -> void:
-	var unlocked: bool = Game.can_start_draft()
-	btn_to_draft.disabled = not unlocked
-	btn_to_draft.tooltip_text = "Start the Draft" if unlocked else "Complete the Playoffs to unlock the Draft."
-	btn_to_draft.modulate = Color(1, 1, 1, 1.0) if unlocked else Color(1, 1, 1, 0.6)
+	# Draft button logic
+	var draft_unlocked: bool = Game.can_start_draft()
+	btn_to_draft.disabled = not draft_unlocked
+	btn_to_draft.tooltip_text = "Start the Draft" if draft_unlocked else "Complete the Playoffs to unlock the Draft."
+	btn_to_draft.modulate = Color(1, 1, 1, 1.0) if draft_unlocked else Color(1, 1, 1, 0.6)
+	
+	# Dungeons button logic
+	var dungeons_unlocked: bool = _can_access_dungeons()
+	btn_to_dungeons.disabled = not dungeons_unlocked
+	btn_to_dungeons.tooltip_text = "Explore Dungeons" if dungeons_unlocked else "Need at least one adventurer to explore dungeons."
+	btn_to_dungeons.modulate = Color(1, 1, 1, 1.0) if dungeons_unlocked else Color(1, 1, 1, 0.6)
+
+func _can_access_dungeons() -> bool:
+	# Can access dungeons if we have at least one adventurer
+	# and we're not currently in draft phase
+	return Game.roster.size() > 0 and Game.phase != Game.Phase.DRAFT
 
 func _can_start_draft() -> bool:
 	# Prefer Game.can_start_draft() if present.
@@ -73,7 +88,6 @@ func _on_phase_or_season_changed(_arg: Variant = null) -> void:
 	_refresh_cta()
 	# If your roster changes when phases change, you can also refresh it:
 	# _populate_roster()
-
 
 # ---------- Roster UI ----------
 
@@ -136,25 +150,16 @@ func _on_to_draft() -> void:
 	if Game.start_draft_gate():
 		_switch_scene("res://scenes/screens/draft_screen/draft_screen.tscn")
 
-	# Close the gate so Draft can’t be re-entered until next playoffs.
-	if Game.has_method("start_new_draft_gate"):
-		Game.start_new_draft_gate()
-
-	Game.goto(Game.Phase.DRAFT)
-	_switch_scene("res://scenes/screens/draft_screen/draft_screen.tscn")
+func _on_to_dungeons() -> void:
+	if _can_access_dungeons():
+		Game.goto(Game.Phase.DUNGEONS)
+		_switch_scene("res://scenes/screens/dungeon_screen/dungeon_screen.tscn")
 
 func _on_save_pressed() -> void:
 	print("Save not implemented yet.")
 
 func _on_main_menu() -> void:
-	
 	_switch_scene("res://scenes/screens/main_menu/main_menu.tscn")
 
 func _switch_scene(path: String) -> void:
-	var packed: PackedScene = load(path) as PackedScene
-	if packed == null:
-		push_error("Scene not found or not a PackedScene: " + path)
-		return
-	var inst: Node = packed.instantiate()
-	get_tree().root.add_child(inst)
-	queue_free()
+	get_tree().change_scene_to_file(path)

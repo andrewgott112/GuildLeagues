@@ -121,6 +121,10 @@ size_flags_horizontal = 0
 theme_override_font_sizes/font_size = 16
 text = "Go To Draft"
 
+[node name="ToDungeon" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+text = "Go To Dungeon"
+
 [node name="Control" type="Control" parent="Margin/Column/BottomBar"]
 layout_mode = 2
 size_flags_horizontal = 3

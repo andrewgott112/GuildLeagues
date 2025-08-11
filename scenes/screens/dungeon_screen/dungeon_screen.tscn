@@ -1,0 +1,116 @@
+[gd_scene load_steps=3 format=3 uid="uid://bty3igbaod0xs"]
+
+[ext_resource type="Script" uid="uid://bbenjdh5es1qg" path="res://scenes/screens/dungeon_screen/DungeonScreen.gd" id="1_fjswe"]
+[ext_resource type="Texture2D" uid="uid://b4wuvsf0wihqd" path="res://resources/gradient.tres" id="2_vumjv"]
+
+[node name="DungeonScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_fjswe")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_vumjv")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Column" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TopBar" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Column/TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Dungeons"
+
+[node name="Spacer" type="Control" parent="Margin/Column/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DungeonInfo" type="Label" parent="Margin/Column/TopBar"]
+layout_mode = 2
+text = "Ancient Caverns (Difficulty: 1)
+Monsters: 5 | Treasure: 2 | Bosses: 1"
+horizontal_alignment = 2
+
+[node name="PartyInfo" type="Label" parent="Margin/Column/TopBar"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+text = "Party (3): ATK 15 | DEF 12 | HP 45"
+
+[node name="DungeonPanel" type="Panel" parent="Margin/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Margin/Column/DungeonPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+follow_focus = true
+horizontal_scroll_mode = 0
+
+[node name="GridContainer" type="GridContainer" parent="Margin/Column/DungeonPanel/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+columns = 20
+
+[node name="BottomBar" type="HBoxContainer" parent="Margin/Column"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="GenerationOptions" type="OptionButton" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Simple Rooms"
+
+[node name="GenerateBtn" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 14
+text = "Generate New"
+
+[node name="Spacer2" type="Control" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ExploreBtn" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 16
+text = "Explore Dungeon"
+
+[node name="BackBtn" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Back to Guild"
