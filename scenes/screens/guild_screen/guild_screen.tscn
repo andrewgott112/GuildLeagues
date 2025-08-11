@@ -1,0 +1,130 @@
+[gd_scene load_steps=3 format=3 uid="uid://dsynpf1qnwrg7"]
+
+[ext_resource type="Script" uid="uid://yysq7pokuayu" path="res://scenes/screens/guild_screen/GuildScreen.gd" id="1_tivws"]
+[ext_resource type="Texture2D" uid="uid://b4wuvsf0wihqd" path="res://resources/gradient.tres" id="2_aqmlp"]
+
+[node name="GuildScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_tivws")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_aqmlp")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Column" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TopBar" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Margin/Column/TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Guild"
+
+[node name="Control" type="Control" parent="Margin/Column/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SeasonLabel" type="Label" parent="Margin/Column/TopBar"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Season 1"
+horizontal_alignment = 2
+
+[node name="GoldBox" type="HBoxContainer" parent="Margin/Column/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/separation = 6
+
+[node name="GoldText" type="Label" parent="Margin/Column/TopBar/GoldBox"]
+layout_mode = 2
+text = "Gold:"
+horizontal_alignment = 2
+
+[node name="GoldValue" type="Label" parent="Margin/Column/TopBar/GoldBox"]
+custom_minimum_size = Vector2(64, 0)
+layout_mode = 2
+text = "0"
+
+[node name="RosterPanel" type="Panel" parent="Margin/Column"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RosterPanelVBox" type="VBoxContainer" parent="Margin/Column/RosterPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="RosterTitle" type="Label" parent="Margin/Column/RosterPanel/RosterPanelVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Roster"
+
+[node name="RosterScroll" type="ScrollContainer" parent="Margin/Column/RosterPanel/RosterPanelVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+follow_focus = true
+horizontal_scroll_mode = 0
+
+[node name="RosterList" type="VBoxContainer" parent="Margin/Column/RosterPanel/RosterPanelVBox/RosterScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 0
+theme_override_constants/separation = 6
+
+[node name="BottomBar" type="HBoxContainer" parent="Margin/Column"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ToDraft" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_font_sizes/font_size = 16
+text = "Go To Draft"
+
+[node name="Control" type="Control" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SaveBtn" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+tooltip_text = "Not Implemented Yet"
+disabled = true
+text = "Save"
+
+[node name="ToMenu" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 8
+text = "Main Menu"
