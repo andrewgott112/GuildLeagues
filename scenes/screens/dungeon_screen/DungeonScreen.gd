@@ -21,6 +21,7 @@ var tile_buttons: Array = []
 # Exploration state
 var exploration_timer: Timer
 var total_gold_found: int = 0
+var total_gold_collected: int = 0  # NEW: Track actual gold collected vs left behind
 
 const TILE_SIZE = 32
 
@@ -77,6 +78,7 @@ func _generate_new_dungeon():
 	
 	# Reset exploration state
 	total_gold_found = 0
+	total_gold_collected = 0
 	exploration_timer.stop()
 	
 	# Create new visual explorer
@@ -124,11 +126,23 @@ func _update_dungeon_info():
 	if visual_explorer.is_exploring():
 		var summary = visual_explorer.get_exploration_summary()
 		info_text += "\n--- EXPLORING ---"
-		info_text += "\nSteps: %d | Tiles: %d | Gold: %d" % [summary.moves_made, summary.tiles_explored, total_gold_found]
+		info_text += "\nSteps: %d | Tiles: %d" % [summary.moves_made, summary.tiles_explored]
+		info_text += "\nGold: %d/%d" % [summary.gold_carried, summary.gold_capacity]
+		
+		# NEW: Show exit status
+		if summary.exit_found:
+			info_text += " | Exit found"
+		if summary.decided_to_exit:
+			info_text += " | Heading to exit"
+			
 	elif visual_explorer.is_finished():
 		var summary = visual_explorer.get_exploration_summary()
 		info_text += "\n--- EXPLORATION COMPLETE ---"
-		info_text += "\nTotal Steps: %d | Total Gold: %d" % [summary.moves_made, total_gold_found]
+		info_text += "\nTotal Steps: %d | Gold Collected: %d" % [summary.moves_made, total_gold_collected]
+		
+		# Show efficiency if we have the data
+		if "exploration_efficiency" in summary:
+			info_text += "\nEfficiency: %.1f%%" % (summary.exploration_efficiency * 100)
 	
 	dungeon_info.text = info_text
 
@@ -147,7 +161,7 @@ func _update_party_info():
 		total_defense += adventurer.defense
 		total_hp += adventurer.hp
 		
-		# Calculate navigation contribution (matching visual_exploration logic)
+		# Calculate navigation contribution
 		if adventurer.role and str(adventurer.role.role_stat_name).to_lower() in ["navigation", "navigate"]:
 			navigation_score += adventurer.role_stat * 2
 		else:
@@ -165,6 +179,9 @@ func _update_party_info():
 	elif navigation_score >= 15: nav_rating = "Average"
 	
 	var nav_info = "Navigation: %s (%d)" % [nav_rating, navigation_score]
+	
+	# NEW: Add carrying capacity info
+	nav_info += "\nCarrying Capacity: 100g"  # v0.1 flat cap
 	
 	if visual_explorer.is_exploring():
 		var party_pos = visual_explorer.get_party_position()
@@ -224,6 +241,19 @@ func _create_tile_button(tile, x: int, y: int) -> Button:
 	var button_text = tile.get_display_char()
 	var button_color = tile.get_display_color()
 	
+	# Override display for cleared tiles
+	if tile.cleared and tile.tile_type in [DungeonTileResource.TREASURE, DungeonTileResource.MONSTER, DungeonTileResource.BOSS]:
+		match tile.tile_type:
+			DungeonTileResource.TREASURE:
+				button_text = "t"
+				button_color = Color.GRAY
+			DungeonTileResource.MONSTER:
+				button_text = "m"
+				button_color = Color.DARK_GRAY
+			DungeonTileResource.BOSS:
+				button_text = "b"
+				button_color = Color.DARK_GRAY
+	
 	if is_party_pos:
 		button_text = "P"
 		button_color = Color.CYAN
@@ -248,8 +278,12 @@ func _create_tile_button(tile, x: int, y: int) -> Button:
 	
 	# Set tooltip
 	var tooltip = _get_tile_tooltip(tile)
-	if is_visited: tooltip += "\n(Explored)"
-	elif visual_explorer.is_exploring(): tooltip += "\n(Unexplored)"
+	if tile.cleared and tile.tile_type in [DungeonTileResource.TREASURE, DungeonTileResource.MONSTER, DungeonTileResource.BOSS]:
+		tooltip += "\n(Cleared)"
+	elif is_visited: 
+		tooltip += "\n(Explored)"
+	elif visual_explorer.is_exploring(): 
+		tooltip += "\n(Unexplored)"
 	button.tooltip_text = tooltip
 	
 	# Disable walls
@@ -268,13 +302,25 @@ func _get_tile_tooltip(tile) -> String:
 		DungeonTileResource.ENTRANCE:
 			return "Dungeon entrance"
 		DungeonTileResource.EXIT:
-			return "Dungeon exit"
+			if tile.cleared:
+				return "Dungeon exit (bonus claimed)"
+			else:
+				return "Dungeon exit"
 		DungeonTileResource.TREASURE:
-			return "Treasure room\nValue: %d gold" % tile.treasure_value
+			if tile.cleared:
+				return "Empty treasure chest (already looted)"
+			else:
+				return "Treasure room\nValue: %d gold" % tile.treasure_value
 		DungeonTileResource.MONSTER:
-			return "Monster encounter\nLevel: %d | Count: %d" % [tile.monster_level, tile.monster_count]
+			if tile.cleared:
+				return "Empty monster lair (already cleared)"
+			else:
+				return "Monster encounter\nLevel: %d | Count: %d" % [tile.monster_level, tile.monster_count]
 		DungeonTileResource.BOSS:
-			return "Boss encounter\nLevel: %d" % tile.monster_level
+			if tile.cleared:
+				return "Boss chamber (already defeated)"
+			else:
+				return "Boss encounter\nLevel: %d" % tile.monster_level
 		_:
 			return "Unknown"
 
@@ -293,9 +339,9 @@ func _on_explore_pressed():
 	
 	print("Starting visual exploration...")
 	
-	# Start exploration using your visual exploration system
 	if visual_explorer.start_exploration(current_dungeon, Game.roster):
 		total_gold_found = 0
+		total_gold_collected = 0
 		exploration_timer.start()
 		_update_display()
 		print("Visual exploration started!")
@@ -315,32 +361,36 @@ func _on_exploration_timer():
 		exploration_timer.stop()
 		return
 	
-	# Execute one step using your visual exploration system
 	var step_result = visual_explorer.step_exploration()
 	
-	# Check if finished
 	if visual_explorer.is_finished():
 		exploration_timer.stop()
 
 func _on_step_complete(result: Dictionary):
 	print("Exploration step: %s" % result.message)
 	
-	# Handle gold found
+	# NEW: Handle gold collection vs gold found
 	if result.gold_found > 0:
 		total_gold_found += result.gold_found
-		Game.gold += result.gold_found
-		print("Found %d gold! (Total: %d)" % [result.gold_found, total_gold_found])
+		
+		if result.has("gold_collected"):
+			total_gold_collected += result.gold_collected
+			Game.gold += result.gold_collected
+			print("Found %d gold, collected %d! (Total collected: %d)" % [result.gold_found, result.gold_collected, total_gold_collected])
+			
+			if result.has("gold_left_behind") and result.gold_left_behind > 0:
+				print("Left %d gold behind due to carrying capacity!" % result.gold_left_behind)
+		else:
+			# Fallback for old format
+			total_gold_collected += result.gold_found
+			Game.gold += result.gold_found
+			print("Found %d gold! (Total: %d)" % [result.gold_found, total_gold_collected])
 	
 	# Handle bonus gold
 	if result.bonus_gold > 0:
-		total_gold_found += result.bonus_gold
+		total_gold_collected += result.bonus_gold
 		Game.gold += result.bonus_gold
 		print("Bonus gold: %d!" % result.bonus_gold)
-	
-	# Handle monster encounters
-	if result.event_type == "monster":
-		print("Monster encounter! Level %d, Count %d" % [result.monster_level, result.monster_count])
-		# Future: pause for combat
 	
 	# Update visual display
 	_update_display()
@@ -350,7 +400,14 @@ func _on_exploration_finished(final_result: Dictionary):
 	print("Total moves: %d" % final_result.total_moves)
 	print("Tiles explored: %d" % final_result.tiles_explored)
 	print("Exploration efficiency: %.1f%%" % (final_result.exploration_efficiency * 100))
-	print("Total gold found: %d" % total_gold_found)
+	print("Total gold collected: %d" % total_gold_collected)
+	
+	# NEW: Show exit reason
+	if final_result.has("exit_reason"):
+		print("Exit reason: %s" % final_result.exit_reason)
+	if final_result.has("early_exit") and final_result.early_exit:
+		print("Early exit: Yes")
+	
 	print("============================\n")
 	
 	_update_display()

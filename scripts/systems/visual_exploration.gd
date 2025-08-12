@@ -16,9 +16,17 @@ enum ExplorationState {
 var current_state: ExplorationState = ExplorationState.IDLE
 var party_position: Vector2i = Vector2i.ZERO
 var visited_tiles: Array[Vector2i] = []
+var retreated_tiles: Array[Vector2i] = []
 var exploration_targets: Array[Vector2i] = []
 var current_path: Array[Vector2i] = []
 var exploration_progress: Dictionary = {}
+
+# Gold and exit management
+var gold_capacity: int = 100  # v0.1 flat cap, expand later
+var current_gold_carried: int = 0
+var exit_position: Vector2i = Vector2i(-1, -1)
+var exit_found: bool = false
+var decided_to_exit: bool = false
 
 # Party stats
 var party_navigation: int = 0
@@ -49,7 +57,6 @@ func start_exploration(dungeon_ref: DungeonResource, party_ref: Array) -> bool:
 	# Find entrance
 	var entrance_tiles = dungeon.find_tiles_of_type(DungeonTileResource.ENTRANCE)
 	if entrance_tiles.is_empty():
-		# If no entrance, start at first empty tile
 		var empty_tiles = dungeon.find_tiles_of_type(DungeonTileResource.EMPTY)
 		if empty_tiles.is_empty():
 			return false
@@ -59,9 +66,20 @@ func start_exploration(dungeon_ref: DungeonResource, party_ref: Array) -> bool:
 	
 	# Initialize exploration
 	visited_tiles.clear()
+	retreated_tiles.clear()
 	exploration_targets.clear()
 	current_path.clear()
 	moves_made = 0
+	
+	# Initialize gold and exit tracking
+	current_gold_carried = 0
+	exit_position = Vector2i(-1, -1)
+	exit_found = false
+	decided_to_exit = false
+	
+	# Clear oscillation tracking
+	if has_meta("recent_positions"):
+		set_meta("recent_positions", [])
 	
 	visited_tiles.append(party_position)
 	_discover_nearby_targets()
@@ -88,6 +106,14 @@ func step_exploration() -> Dictionary:
 	if current_state != ExplorationState.EXPLORING:
 		return exploration_progress
 	
+	# Check if party decides to exit
+	if _should_party_exit():
+		if exit_found and exit_position != Vector2i(-1, -1):
+			_head_to_exit()
+		else:
+			_finish_exploration_early("Party decided to leave without finding exit")
+			return exploration_progress
+	
 	# Check if we have a path to follow
 	if current_path.is_empty():
 		print("No current path, finding next destination...")
@@ -96,18 +122,39 @@ func step_exploration() -> Dictionary:
 	# If still no path, exploration might be done
 	if current_path.is_empty():
 		print("No path found - finishing exploration")
-		print("Current position: (%d, %d)" % [party_position.x, party_position.y])
-		print("Visited tiles: %d" % visited_tiles.size())
-		print("Available targets: %d" % exploration_targets.size())
 		_finish_exploration()
 		return exploration_progress
 	
+	# Oscillation detection - track last few positions
+	@warning_ignore("untyped_declaration")
+	if not has_meta("recent_positions"):
+		set_meta("recent_positions", [])
+	
+	var recent_positions = get_meta("recent_positions")
+	
 	# Move to next position in path
 	var next_pos = current_path.pop_front()
+	
+	# Check for oscillation before moving
+	if party_position in recent_positions:
+		var recent_count = recent_positions.count(party_position)
+		if recent_count >= 2:
+			print("Oscillation detected! Party has been at (%d, %d) %d times recently" % [party_position.x, party_position.y, recent_count])
+			# Clear path to force recalculation with different logic
+			current_path.clear()
+			# Clear recent positions to break the pattern
+			set_meta("recent_positions", [])
+			return _create_step_result("Party stops to reassess route")
+	
 	party_position = next_pos
 	moves_made += 1
+	
+	# Track recent positions (keep last 8)
+	recent_positions.append(party_position)
+	if recent_positions.size() > 8:
+		recent_positions.pop_front()
+	set_meta("recent_positions", recent_positions)
 
-	# 🔧 NEW: don't let the current tile remain a target
 	if party_position in exploration_targets:
 		exploration_targets.erase(party_position)
 
@@ -118,15 +165,121 @@ func step_exploration() -> Dictionary:
 	var tile = dungeon.get_tile(party_position.x, party_position.y)
 	var step_result = _process_tile_encounter(tile)
 	
-	# Discover new targets based on navigation skill
+	# Handle retreats
+	if step_result.event_type in ["combat_retreat", "boss_retreat"]:
+		if party_position not in retreated_tiles:
+			retreated_tiles.append(party_position)
+			print("Added retreat position: (%d, %d)" % [party_position.x, party_position.y])
+		current_path.clear()
+		# Clear recent positions after retreat to avoid confusion
+		set_meta("recent_positions", [])
+	
+	# Handle gold collection
+	if step_result.gold_found > 0:
+		var gold_to_collect = min(step_result.gold_found, gold_capacity - current_gold_carried)
+		current_gold_carried += gold_to_collect
+		step_result.gold_collected = gold_to_collect
+		step_result.gold_left_behind = step_result.gold_found - gold_to_collect
+		
+		if gold_to_collect < step_result.gold_found:
+			step_result.message += " (Carrying capacity reached! Left %d gold behind)" % step_result.gold_left_behind
+	
+	# Track exit discovery
+	if step_result.event_type == "exit" and not exit_found:
+		exit_found = true
+		exit_position = party_position
+		step_result.message += " (Exit located for future use)"
+	
+	# Discover new targets
 	_discover_nearby_targets()
 	
 	exploration_progress = step_result
 	exploration_step_complete.emit(step_result)
 	
-	# Continue exploring regardless of what we encountered
-	# All encounters (treasure, monsters, etc.) are handled automatically
 	return step_result
+
+# Exit decision logic
+func _should_party_exit() -> bool:
+	if decided_to_exit:
+		return true
+	
+	var exit_score = 0.0
+	var reasons = []
+	
+	# Factor 1: Gold capacity
+	var gold_percentage = float(current_gold_carried) / float(gold_capacity)
+	if gold_percentage >= 1.0:
+		exit_score += 100.0  # Must exit if at capacity
+		reasons.append("carrying capacity reached")
+	elif gold_percentage >= 0.8:
+		exit_score += 50.0  # Strong incentive to exit
+		reasons.append("heavy load")
+	elif gold_percentage >= 0.6:
+		exit_score += 20.0  # Moderate incentive
+		reasons.append("good haul")
+	
+	# Factor 2: Navigation skill affects decision-making
+	var nav_factor = party_navigation / 40.0  # 0.0 to ~1.5
+	
+	# Good navigators are more confident and explore longer
+	if party_navigation >= 35:
+		exit_score -= 15.0  # Expert navigators push further
+	elif party_navigation <= 15:
+		exit_score += 20.0  # Poor navigators get nervous
+		if moves_made > 20:
+			reasons.append("poor navigation")
+	
+	# Factor 3: Moves made (fatigue factor)
+	if moves_made > 50:
+		exit_score += 30.0
+		reasons.append("party fatigue")
+	elif moves_made > 30:
+		exit_score += 15.0
+	
+	# Factor 4: Retreat count (danger assessment)
+	var retreat_count = retreated_tiles.size()
+	if retreat_count >= 3:
+		exit_score += 40.0
+		reasons.append("too many dangerous encounters")
+	elif retreat_count >= 2:
+		exit_score += 20.0
+		reasons.append("dangerous area")
+	
+	# Factor 5: Target scarcity
+	if exploration_targets.size() <= 2 and visited_tiles.size() > 10:
+		exit_score += 25.0
+		reasons.append("few targets remaining")
+	
+	# Factor 6: Exit availability
+	if not exit_found:
+		exit_score -= 20.0  # Reluctant to leave without knowing exit
+	
+	# Factor 7: Random chance based on party temperament
+	var random_factor = rng.randf_range(-10.0, 10.0)
+	exit_score += random_factor
+	
+	# Decision threshold
+	var exit_threshold = 50.0
+	
+	if exit_score >= exit_threshold:
+		decided_to_exit = true
+		var reason_text = " (".join(reasons) + ")" if reasons.size() > 0 else ""
+		print("Party decides to exit! Score: %.1f %s" % [exit_score, reason_text])
+		return true
+	
+	return false
+
+# Head to exit when party decides to leave
+func _head_to_exit():
+	if party_position == exit_position:
+		_finish_exploration_early("Party successfully exited the dungeon")
+		return
+	
+	# Clear current path and set exit as only target
+	current_path.clear()
+	exploration_targets.clear()
+	exploration_targets.append(exit_position)
+	print("Party heading to exit at (%d, %d)" % [exit_position.x, exit_position.y])
 
 func _calculate_navigation_skill(party_data: Array) -> int:
 	var total_navigation = 0
@@ -148,59 +301,63 @@ func _calculate_party_strength(party_data: Array) -> int:
 	return total_strength
 
 func _discover_nearby_targets():
-	# Navigation skill determines how far the party can "see" potential targets
-	var vision_range = 2 + (party_navigation / 20)  # 2-5 tiles range
+	var vision_range = 2 + (party_navigation / 20)
 	
-	# Find interesting tiles within range
 	for y in range(party_position.y - vision_range, party_position.y + vision_range + 1):
 		for x in range(party_position.x - vision_range, party_position.x + vision_range + 1):
 			if not dungeon.is_valid_pos(x, y):
 				continue
 			
 			var pos = Vector2i(x, y)
-			if pos == party_position or pos in visited_tiles:
+			if pos == party_position or pos in visited_tiles or pos in retreated_tiles:
 				continue
 			
 			var tile = dungeon.get_tile(x, y)
 			if not tile or not tile.is_passable():
 				continue
 			
-			# Add interesting tiles to targets
+			# Prioritize exit if party wants to leave
+			if decided_to_exit and tile.tile_type == DungeonTileResource.EXIT:
+				if pos not in exploration_targets:
+					exploration_targets.append(pos)
+				continue
+			
+			# Skip other targets if heading to exit
+			if decided_to_exit:
+				continue
+			
 			if tile.tile_type in [DungeonTileResource.TREASURE, DungeonTileResource.MONSTER, DungeonTileResource.EXIT]:
+				if tile.tile_type in [DungeonTileResource.MONSTER, DungeonTileResource.BOSS] and pos in retreated_tiles:
+					continue
 				if pos not in exploration_targets:
 					exploration_targets.append(pos)
 			elif tile.tile_type == DungeonTileResource.EMPTY:
-				# Add empty rooms for general exploration (more likely now)
-				if rng.randf() < 0.7 and pos not in exploration_targets:  # Increased from 0.3 to 0.7
+				if rng.randf() < 0.7 and pos not in exploration_targets:
 					exploration_targets.append(pos)
 	
-	# If we still don't have many targets, be more aggressive
-	if exploration_targets.size() < 3:
-		print("Low target count (%d), expanding search..." % exploration_targets.size())
+	if exploration_targets.size() < 3 and not decided_to_exit:
 		_expand_target_search()
 
 func _find_next_destination():
 	current_path.clear()
 	print("Finding next destination from (%d, %d)" % [party_position.x, party_position.y])
 	
-	if exploration_targets.is_empty():
-		print("No targets available, searching for unexplored areas...")
-		# No specific targets, try to find unexplored areas
+	for retreated_pos in retreated_tiles:
+		if retreated_pos in exploration_targets:
+			exploration_targets.erase(retreated_pos)
+	
+	if exploration_targets.is_empty() and not decided_to_exit:
 		_find_unexplored_areas()
 	
-	if exploration_targets.is_empty():
-		print("Still no targets, doing thorough search...")
-		# Still nothing, do a more thorough search for ANY unvisited passable tile
+	if exploration_targets.is_empty() and not decided_to_exit:
 		_find_any_unvisited_areas()
 	
 	if exploration_targets.is_empty():
 		print("No unvisited areas found - exploration complete")
-		# Truly nothing left, exploration is done
 		return
 	
 	print("Have %d targets available" % exploration_targets.size())
 	
-	# Choose best target based on navigation skill and priorities
 	var best_target = _choose_best_target()
 	if best_target == Vector2i(-1, -1):
 		print("No valid target chosen")
@@ -208,51 +365,43 @@ func _find_next_destination():
 	
 	print("Chosen target: (%d, %d)" % [best_target.x, best_target.y])
 	
-	# Generate path to target
 	current_path = _find_path_to_target(best_target)
 	if current_path.is_empty():
 		print("Failed to find path to target (%d, %d)" % [best_target.x, best_target.y])
+		exploration_targets.erase(best_target)
 	else:
 		print("Found path with %d steps" % current_path.size())
-	
-	exploration_targets.erase(best_target)
+		exploration_targets.erase(best_target)
 
 func _find_unexplored_areas():
-	# Look for empty tiles that haven't been visited yet
 	var empty_tiles = dungeon.find_tiles_of_type(DungeonTileResource.EMPTY)
 	
 	for tile in empty_tiles:
-		if tile.position not in visited_tiles:
+		if tile.position not in visited_tiles and tile.position not in retreated_tiles:
 			exploration_targets.append(tile.position)
 	
-	# Also look for special tiles we might have missed
-	var special_types = [DungeonTileResource.TREASURE, DungeonTileResource.MONSTER, DungeonTileResource.EXIT, DungeonTileResource.BOSS]
+	var special_types = [DungeonTileResource.TREASURE, DungeonTileResource.EXIT]
 	for tile_type in special_types:
 		var special_tiles = dungeon.find_tiles_of_type(tile_type)
 		for tile in special_tiles:
-			if tile.position not in visited_tiles and tile.position not in exploration_targets:
+			if tile.position not in visited_tiles and tile.position not in exploration_targets and tile.position not in retreated_tiles:
 				exploration_targets.append(tile.position)
 
 func _find_any_unvisited_areas():
-	# Last resort: find ANY passable tile we haven't visited
-	print("Doing thorough search for unvisited areas...")
-	
 	for y in dungeon.height:
 		for x in dungeon.width:
 			var pos = Vector2i(x, y)
-			if pos in visited_tiles:
+			if pos in visited_tiles or pos in retreated_tiles:
 				continue
 				
 			var tile = dungeon.get_tile(x, y)
 			if tile and tile.is_passable():
+				if tile.tile_type in [DungeonTileResource.MONSTER, DungeonTileResource.BOSS] and pos in retreated_tiles:
+					continue
 				exploration_targets.append(pos)
-				print("Found unvisited passable tile at (%d, %d)" % [x, y])
-	
-	print("Total unvisited areas found: %d" % exploration_targets.size())
 
 func _expand_target_search():
-	# Expand search radius when we're running low on targets
-	var expanded_range = 8  # Look much further out
+	var expanded_range = 8
 	
 	for y in range(party_position.y - expanded_range, party_position.y + expanded_range + 1):
 		for x in range(party_position.x - expanded_range, party_position.x + expanded_range + 1):
@@ -260,176 +409,294 @@ func _expand_target_search():
 				continue
 			
 			var pos = Vector2i(x, y)
-			if pos == party_position or pos in visited_tiles or pos in exploration_targets:
+			if pos == party_position or pos in visited_tiles or pos in exploration_targets or pos in retreated_tiles:
 				continue
 			
 			var tile = dungeon.get_tile(x, y)
 			if tile and tile.is_passable():
+				if tile.tile_type in [DungeonTileResource.MONSTER, DungeonTileResource.BOSS] and pos in retreated_tiles:
+					continue
 				exploration_targets.append(pos)
-				if exploration_targets.size() >= 10:  # Don't get too many
+				if exploration_targets.size() >= 10:
 					break
 		if exploration_targets.size() >= 10:
 			break
-	
-	print("After expanded search: %d targets" % exploration_targets.size())
 
 func _choose_best_target() -> Vector2i:
 	if exploration_targets.is_empty():
-		print("No exploration targets available")
 		return Vector2i(-1, -1)
 
 	var best_target := Vector2i(-1, -1)
 	var best_score := -1e20
-	var valid_targets := 0
 
 	for target in exploration_targets:
-		if target == party_position:
-			continue  # <-- don't retarget the tile we’re on
-
+		if target == party_position or target in retreated_tiles:
+			continue
+		
 		var tile = dungeon.get_tile(target.x, target.y)
 		if not tile:
 			continue
 		
-		valid_targets += 1
 		var score = 0.0
 		var distance = party_position.distance_to(Vector2(target))
 		
-		# Prioritize by tile type
-		match tile.tile_type:
-			DungeonTileResource.TREASURE:
-				score = 100.0 - distance * 2.0  # High priority
-			DungeonTileResource.EXIT:
-				score = 80.0 - distance * 1.5   # Medium-high priority
-			DungeonTileResource.MONSTER:
-				score = 60.0 - distance * 1.0   # Medium priority
-			DungeonTileResource.EMPTY:
-				score = 30.0 - distance * 3.0   # Low priority, prefer close ones
+		# If heading to exit, prioritize exit heavily
+		if decided_to_exit and tile.tile_type == DungeonTileResource.EXIT:
+			score = 1000.0 - distance * 1.0
+		elif decided_to_exit:
+			continue  # Skip non-exit targets when heading to exit
+		else:
+			match tile.tile_type:
+				DungeonTileResource.TREASURE:
+					# Lower priority if near gold capacity
+					var gold_factor = 1.0 - (float(current_gold_carried) / float(gold_capacity)) * 0.5
+					score = 100.0 * gold_factor - distance * 2.0
+				DungeonTileResource.EXIT:
+					score = 80.0 - distance * 1.5
+				DungeonTileResource.MONSTER:
+					score = 40.0 - distance * 1.0
+				DungeonTileResource.EMPTY:
+					score = 30.0 - distance * 3.0
 		
-		# Navigation skill affects target selection
 		if party_navigation > 30:
-			# Good navigators prefer treasures and exits
 			if tile.tile_type in [DungeonTileResource.TREASURE, DungeonTileResource.EXIT]:
 				score *= 1.5
-		
-		print("Target (%d, %d): type %d, distance %.1f, score %.1f" % [target.x, target.y, tile.tile_type, distance, score])
 		
 		if score > best_score:
 			best_score = score
 			best_target = target
 	
-	print("Valid targets: %d, Best target: (%d, %d) with score %.1f" % [valid_targets, best_target.x, best_target.y, best_score])
 	return best_target
 
 func _find_path_to_target(target: Vector2i) -> Array[Vector2i]:
 	print("Finding path from (%d, %d) to (%d, %d)" % [party_position.x, party_position.y, target.x, target.y])
 	
-	# Simple pathfinding - move towards target step by step
+	# Enhanced pathfinding with oscillation prevention
 	var path: Array[Vector2i] = []
 	var current = party_position
-	var max_steps = 50  # Increased from 20 to allow longer paths
+	var max_steps = 50
 	var steps = 0
 	
+	# Track recent positions to prevent oscillation
+	var recent_positions: Array[Vector2i] = []
+	var max_recent_memory = 6  # Remember last 6 positions
+	
+	# Failed move tracking
+	var failed_moves: Dictionary = {}  # pos -> count of failures
+	
 	while current != target and steps < max_steps:
-		var next_step = _get_next_step_towards(current, target)
-		if next_step == current:
-			print("Pathfinding stuck at (%d, %d) - no valid moves" % [current.x, current.y])
-			break  # Can't move closer
+		var next_step = _get_next_step_towards_smart(current, target, recent_positions, failed_moves)
 		
+		if next_step == current:
+			print("Pathfinding stuck at (%d, %d) - no valid moves available" % [current.x, current.y])
+			break
+		
+		# Check if this would create immediate oscillation
+		if recent_positions.size() >= 2 and next_step == recent_positions[-2]:
+			print("Detected immediate oscillation attempt from (%d, %d) to (%d, %d)" % [current.x, current.y, next_step.x, next_step.y])
+			# Try to find a different move
+			next_step = _find_non_oscillating_move(current, target, recent_positions, failed_moves)
+			if next_step == current:
+				print("No non-oscillating move found, breaking path")
+				break
+		
+		# Add to path and update tracking
 		path.append(next_step)
+		recent_positions.append(current)
+		
+		# Limit memory size
+		if recent_positions.size() > max_recent_memory:
+			recent_positions.pop_front()
+		
 		current = next_step
 		steps += 1
+		
+		# Detect if we've been here too recently
+		var recent_visits = recent_positions.count(current)
+		if recent_visits >= 3:
+			print("Visited (%d, %d) too many times recently (%d), aborting path" % [current.x, current.y, recent_visits])
+			break
 	
 	print("Generated path with %d steps (max: %d)" % [path.size(), max_steps])
-	if path.size() > 0:
-		print("First few steps: %s" % str(path.slice(0, 3)))
+	if path.size() > 0 and path.size() <= 10:
+		print("Path steps: %s" % str(path))
+	elif path.size() > 10:
+		print("Long path, first 5 steps: %s" % str(path.slice(0, 5)))
 	
 	return path
 
-func _get_next_step_towards(from: Vector2i, to: Vector2i) -> Vector2i:
+# Smarter pathfinding that considers recent positions and failures
+func _get_next_step_towards_smart(from: Vector2i, to: Vector2i, recent_positions: Array[Vector2i], failed_moves: Dictionary) -> Vector2i:
 	var diff = to - from
-	var step = Vector2i.ZERO
 	
-	# Move one step in the direction of the target
-	if abs(diff.x) > abs(diff.y):
-		step.x = 1 if diff.x > 0 else -1
-	else:
-		step.y = 1 if diff.y > 0 else -1
-	
-	var next_pos = from + step
-	
-	# Check if the next position is valid and passable
-	if dungeon.is_valid_pos(next_pos.x, next_pos.y):
-		var tile = dungeon.get_tile(next_pos.x, next_pos.y)
-		if tile and tile.is_passable():
-			return next_pos
-	
-	# Try alternative directions if direct path is blocked
+	# Calculate all possible directions with scores
+	var move_options = []
 	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	for direction in directions:
-		var alt_pos = from + direction
-		if dungeon.is_valid_pos(alt_pos.x, alt_pos.y):
-			var tile = dungeon.get_tile(alt_pos.x, alt_pos.y)
-			if tile and tile.is_passable():
-				# Don't require unvisited - allow revisiting tiles to get to new areas
-				return alt_pos
 	
-	print("No valid moves from (%d, %d) towards (%d, %d)" % [from.x, from.y, to.x, to.y])
-	return from  # Can't move
+	for direction in directions:
+		var test_pos = from + direction
+		
+		if not _is_valid_move(test_pos):
+			continue
+		
+		var score = _calculate_move_score(test_pos, to, recent_positions, failed_moves)
+		move_options.append({"pos": test_pos, "score": score, "direction": direction})
+	
+	if move_options.is_empty():
+		return from  # No valid moves
+	
+	# Sort by score (higher is better)
+	move_options.sort_custom(func(a, b): return a.score > b.score)
+	
+	# Pick the best move that doesn't create immediate oscillation
+	for option in move_options:
+		var test_pos = option.pos
+		
+		# Avoid immediate back-and-forth
+		if recent_positions.size() >= 1 and test_pos == recent_positions[-1]:
+			continue
+		
+		# Avoid three-position cycles  
+		if recent_positions.size() >= 2 and test_pos == recent_positions[-2]:
+			continue
+		
+		print("Chose move to (%d, %d) with score %.1f" % [test_pos.x, test_pos.y, option.score])
+		return test_pos
+	
+	# If all moves would oscillate, pick the least bad one
+	if move_options.size() > 0:
+		var fallback = move_options[0].pos
+		print("All moves would oscillate, using fallback to (%d, %d)" % [fallback.x, fallback.y])
+		return fallback
+	
+	return from
+
+# Calculate a score for potential moves
+func _calculate_move_score(pos: Vector2i, target: Vector2i, recent_positions: Array[Vector2i], failed_moves: Dictionary) -> float:
+	var score = 0.0
+	
+	# Distance to target (primary factor)
+	var distance = pos.distance_to(Vector2(target))
+	score = 100.0 - distance * 10.0  # Closer is much better
+	
+	# Heavily penalize recently visited positions
+	var recent_visit_count = recent_positions.count(pos)
+	score -= recent_visit_count * 50.0
+	
+	# Penalize failed moves
+	var pos_key = str(pos.x) + "," + str(pos.y)
+	if failed_moves.has(pos_key):
+		score -= failed_moves[pos_key] * 20.0
+	
+	# Small random factor to break ties
+	score += rng.randf_range(-1.0, 1.0)
+	
+	return score
+
+# Find a move that doesn't oscillate
+func _find_non_oscillating_move(from: Vector2i, target: Vector2i, recent_positions: Array[Vector2i], failed_moves: Dictionary) -> Vector2i:
+	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var valid_moves = []
+	
+	for direction in directions:
+		var test_pos = from + direction
+		
+		if not _is_valid_move(test_pos):
+			continue
+		
+		# Skip if this would be immediate oscillation
+		if recent_positions.size() >= 1 and test_pos == recent_positions[-1]:
+			continue
+		if recent_positions.size() >= 2 and test_pos == recent_positions[-2]:
+			continue
+		
+		var distance = test_pos.distance_to(Vector2(target))
+		valid_moves.append({"pos": test_pos, "distance": distance})
+	
+	if valid_moves.is_empty():
+		return from
+	
+	# Sort by distance to target
+	valid_moves.sort_custom(func(a, b): return a.distance < b.distance)
+	return valid_moves[0].pos
+
+func _is_valid_move(pos: Vector2i) -> bool:
+	if not dungeon.is_valid_pos(pos.x, pos.y):
+		return false
+	
+	var tile = dungeon.get_tile(pos.x, pos.y)
+	if not tile or not tile.is_passable():
+		return false
+	
+	if pos in retreated_tiles:
+		return false
+	
+	return true
 
 func _process_tile_encounter(tile) -> Dictionary:
 	var result = _create_step_result("Moved to (%d, %d)" % [party_position.x, party_position.y])
 	
 	match tile.tile_type:
 		DungeonTileResource.TREASURE:
-			# Automatic treasure collection - no pause needed
-			var gold_found = tile.treasure_value
-			result.gold_found = gold_found
-			result.message = "Found treasure worth %d gold!" % gold_found
-			result.event_type = "treasure"
-			# Party automatically collects and continues exploring
+			if not tile.cleared:
+				var gold_found = tile.treasure_value
+				result.gold_found = gold_found
+				result.message = "Found treasure worth %d gold!" % gold_found
+				result.event_type = "treasure"
+				tile.cleared = true
+			else:
+				result.message = "An empty treasure chest (already looted)"
+				result.event_type = "movement"
 			
 		DungeonTileResource.MONSTER:
-			# Auto-resolve combat for now (until combat system is implemented)
-			result.monster_level = tile.monster_level
-			result.monster_count = tile.monster_count
-			
-			# Simple combat resolution based on party strength vs monster strength
-			var monster_strength = tile.monster_level * tile.monster_count * 15
-			var combat_success = _resolve_auto_combat(monster_strength)
-			
-			if combat_success:
-				var combat_gold = tile.monster_count * tile.monster_level * 3
-				result.gold_found = combat_gold
-				result.message = "Defeated %d monsters (Level %d) and found %d gold!" % [tile.monster_count, tile.monster_level, combat_gold]
-				result.event_type = "combat_victory"
+			if not tile.cleared:
+				result.monster_level = tile.monster_level
+				result.monster_count = tile.monster_count
+				
+				var monster_strength = tile.monster_level * tile.monster_count * 15
+				var combat_success = _resolve_auto_combat(monster_strength)
+				
+				if combat_success:
+					var combat_gold = tile.monster_count * tile.monster_level * 3
+					result.gold_found = combat_gold
+					result.message = "Defeated %d monsters (Level %d) and found %d gold!" % [tile.monster_count, tile.monster_level, combat_gold]
+					result.event_type = "combat_victory"
+					tile.cleared = true
+				else:
+					result.message = "Encountered %d strong monsters (Level %d) - party retreated!" % [tile.monster_count, tile.monster_level]
+					result.event_type = "combat_retreat"
 			else:
-				# Failed combat - party retreats but continues exploring
-				result.message = "Encountered %d strong monsters (Level %d) - party retreated!" % [tile.monster_count, tile.monster_level]
-				result.event_type = "combat_retreat"
+				result.message = "Empty monster lair (already cleared)"
+				result.event_type = "movement"
 			
 		DungeonTileResource.EXIT:
 			result.message = "Reached the dungeon exit!"
 			result.event_type = "exit"
-			result.bonus_gold = dungeon.difficulty_level * 10
-			# Continue exploring even after finding exit to discover all areas
+			if not tile.cleared:
+				result.bonus_gold = dungeon.difficulty_level * 10
+				tile.cleared = true
 			
 		DungeonTileResource.ENTRANCE:
 			result.message = "At dungeon entrance"
 			result.event_type = "entrance"
 			
 		DungeonTileResource.BOSS:
-			# Boss encounters - auto-resolve for now
-			var boss_strength = tile.monster_level * 25
-			var boss_victory = _resolve_auto_combat(boss_strength)
-			
-			if boss_victory:
-				var boss_gold = tile.monster_level * 20
-				result.gold_found = boss_gold
-				result.message = "Defeated the dungeon boss! Found %d gold!" % boss_gold
-				result.event_type = "boss_victory"
+			if not tile.cleared:
+				var boss_strength = tile.monster_level * 25
+				var boss_victory = _resolve_auto_combat(boss_strength)
+				
+				if boss_victory:
+					var boss_gold = tile.monster_level * 20
+					result.gold_found = boss_gold
+					result.message = "Defeated the dungeon boss! Found %d gold!" % boss_gold
+					result.event_type = "boss_victory"
+					tile.cleared = true
+				else:
+					result.message = "Encountered a powerful boss - party barely escaped!"
+					result.event_type = "boss_retreat"
 			else:
-				result.message = "Encountered a powerful boss - party barely escaped!"
-				result.event_type = "boss_retreat"
+				result.message = "Boss chamber (already defeated)"
+				result.event_type = "movement"
 			
 		_:
 			result.message = "Exploring empty room"
@@ -438,7 +705,6 @@ func _process_tile_encounter(tile) -> Dictionary:
 	return result
 
 func _resolve_auto_combat(enemy_strength: int) -> bool:
-	# Simple combat resolution: party strength vs enemy strength with some randomness
 	var party_roll = party_strength + rng.randi_range(-party_strength/4, party_strength/4)
 	var enemy_roll = enemy_strength + rng.randi_range(-enemy_strength/4, enemy_strength/4)
 	
@@ -451,12 +717,36 @@ func _create_step_result(message: String) -> Dictionary:
 		"message": message,
 		"event_type": "movement",
 		"gold_found": 0,
+		"gold_collected": 0,
+		"gold_left_behind": 0,
 		"monster_level": 0,
 		"monster_count": 0,
 		"bonus_gold": 0,
 		"tiles_explored": visited_tiles.size(),
-		"navigation_score": party_navigation
+		"navigation_score": party_navigation,
+		"gold_carried": current_gold_carried,
+		"gold_capacity": gold_capacity
 	}
+
+# Early exit function
+func _finish_exploration_early(reason: String):
+	current_state = ExplorationState.FINISHED
+	
+	var final_result = {
+		"success": true,
+		"total_moves": moves_made,
+		"tiles_explored": visited_tiles.size(),
+		"navigation_score": party_navigation,
+		"exploration_efficiency": float(visited_tiles.size()) / float(dungeon.get_all_room_tiles().size()),
+		"visited_positions": visited_tiles.duplicate(),
+		"retreated_positions": retreated_tiles.duplicate(),
+		"gold_collected": current_gold_carried,
+		"exit_reason": reason,
+		"early_exit": true
+	}
+	
+	print("Exploration finished early: %s" % reason)
+	exploration_finished.emit(final_result)
 
 func _finish_exploration():
 	current_state = ExplorationState.FINISHED
@@ -467,7 +757,11 @@ func _finish_exploration():
 		"tiles_explored": visited_tiles.size(),
 		"navigation_score": party_navigation,
 		"exploration_efficiency": float(visited_tiles.size()) / float(dungeon.get_all_room_tiles().size()),
-		"visited_positions": visited_tiles.duplicate()
+		"visited_positions": visited_tiles.duplicate(),
+		"retreated_positions": retreated_tiles.duplicate(),
+		"gold_collected": current_gold_carried,
+		"exit_reason": "Full exploration completed",
+		"early_exit": false
 	}
 	
 	exploration_finished.emit(final_result)
@@ -479,5 +773,10 @@ func get_exploration_summary() -> Dictionary:
 		"tiles_explored": visited_tiles.size(),
 		"party_position": party_position,
 		"navigation_score": party_navigation,
-		"targets_remaining": exploration_targets.size()
+		"targets_remaining": exploration_targets.size(),
+		"retreated_from": retreated_tiles.size(),
+		"gold_carried": current_gold_carried,
+		"gold_capacity": gold_capacity,
+		"exit_found": exit_found,
+		"decided_to_exit": decided_to_exit
 	}
