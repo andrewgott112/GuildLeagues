@@ -4,6 +4,7 @@ class_name VisualExploration
 
 signal exploration_step_complete(result: Dictionary)
 signal exploration_finished(final_result: Dictionary)
+signal monster_encounter(encounter_data: Dictionary)
 
 enum ExplorationState {
 	IDLE,
@@ -20,6 +21,7 @@ var retreated_tiles: Array[Vector2i] = []
 var exploration_targets: Array[Vector2i] = []
 var current_path: Array[Vector2i] = []
 var exploration_progress: Dictionary = {}
+var pending_battle_tile = null
 
 # Gold and exit management
 var gold_capacity: int = 100  # v0.1 flat cap, expand later
@@ -164,6 +166,11 @@ func step_exploration() -> Dictionary:
 	# Check what's at this position
 	var tile = dungeon.get_tile(party_position.x, party_position.y)
 	var step_result = _process_tile_encounter(tile)
+	
+	if step_result.event_type == "combat_encounter":
+		exploration_progress = step_result
+		exploration_step_complete.emit(step_result)
+		return step_result  # Exit early, don't process anything else
 	
 	# Handle retreats
 	if step_result.event_type in ["combat_retreat", "boss_retreat"]:
@@ -654,17 +661,14 @@ func _process_tile_encounter(tile) -> Dictionary:
 				result.monster_count = tile.monster_count
 				
 				var monster_strength = tile.monster_level * tile.monster_count * 15
-				var combat_success = _resolve_auto_combat(monster_strength)
+				var combat_result = _resolve_combat_encounter(monster_strength, tile)
 				
-				if combat_success:
-					var combat_gold = tile.monster_count * tile.monster_level * 3
-					result.gold_found = combat_gold
-					result.message = "Defeated %d monsters (Level %d) and found %d gold!" % [tile.monster_count, tile.monster_level, combat_gold]
-					result.event_type = "combat_victory"
-					tile.cleared = true
-				else:
-					result.message = "Encountered %d strong monsters (Level %d) - party retreated!" % [tile.monster_count, tile.monster_level]
-					result.event_type = "combat_retreat"
+				if combat_result == "combat_encounter":
+					result.message = "Encountered %d monsters (Level %d) - entering combat!" % [tile.monster_count, tile.monster_level]
+					result.event_type = "combat_encounter"
+					return result  # Don't continue processing, wait for battle result
+				
+				# If we get here, it was auto-resolved (shouldn't happen with new system)
 			else:
 				result.message = "Empty monster lair (already cleared)"
 				result.event_type = "movement"
@@ -682,18 +686,18 @@ func _process_tile_encounter(tile) -> Dictionary:
 			
 		DungeonTileResource.BOSS:
 			if not tile.cleared:
-				var boss_strength = tile.monster_level * 25
-				var boss_victory = _resolve_auto_combat(boss_strength)
+				result.monster_level = tile.monster_level
+				result.monster_count = 1  # Bosses are always single encounters
 				
-				if boss_victory:
-					var boss_gold = tile.monster_level * 20
-					result.gold_found = boss_gold
-					result.message = "Defeated the dungeon boss! Found %d gold!" % boss_gold
-					result.event_type = "boss_victory"
-					tile.cleared = true
-				else:
-					result.message = "Encountered a powerful boss - party barely escaped!"
-					result.event_type = "boss_retreat"
+				var boss_strength = tile.monster_level * 25
+				var combat_result = _resolve_combat_encounter(boss_strength, tile)
+				
+				if combat_result == "combat_encounter":
+					result.message = "Encountered a powerful boss (Level %d) - entering combat!" % tile.monster_level
+					result.event_type = "combat_encounter"
+					return result  # Don't continue processing, wait for battle result
+				
+				# If we get here, it was auto-resolved (shouldn't happen with new system)
 			else:
 				result.message = "Boss chamber (already defeated)"
 				result.event_type = "movement"
@@ -704,11 +708,58 @@ func _process_tile_encounter(tile) -> Dictionary:
 	
 	return result
 
-func _resolve_auto_combat(enemy_strength: int) -> bool:
-	var party_roll = party_strength + rng.randi_range(-party_strength/4, party_strength/4)
-	var enemy_roll = enemy_strength + rng.randi_range(-enemy_strength/4, enemy_strength/4)
+func _resolve_combat_encounter(monster_strength: int, tile) -> String:
+	"""Instead of auto-resolving, emit signal for battle system"""
+	pending_battle_tile = tile
 	
-	return party_roll > enemy_roll
+	var encounter_data = {
+		"monster_level": tile.monster_level,
+		"monster_count": tile.monster_count,
+		"monster_strength": monster_strength,
+		"tile_position": tile.position
+	}
+	
+	# Pause exploration and emit signal
+	current_state = ExplorationState.PAUSED_FOR_ENCOUNTER
+	monster_encounter.emit(encounter_data)
+	
+	return "combat_encounter"  # Return special event type
+
+# Add this method to handle battle results
+func resolve_monster_encounter(battle_result: Dictionary):
+	"""Called by DungeonScreen when battle is finished"""
+	if pending_battle_tile == null:
+		print("Warning: No pending battle tile!")
+		return
+	
+	var tile = pending_battle_tile
+	var result_data = _create_step_result("Combat resolved")
+	
+	if battle_result.get("victory", false):
+		# Victory - clear the tile and award gold
+		var combat_gold = tile.monster_count * tile.monster_level * 3
+		result_data.gold_found = combat_gold
+		result_data.message = "Defeated %d monsters (Level %d) and found %d gold!" % [tile.monster_count, tile.monster_level, combat_gold]
+		result_data.event_type = "combat_victory"
+		tile.cleared = true
+		
+		# Update combat stats for party members
+		for adventurer in party:
+			adventurer.add_battle_result(true)
+			adventurer.add_monster_kill()
+	else:
+		# Defeat or retreat - mark as retreated
+		if party_position not in retreated_tiles:
+			retreated_tiles.append(party_position)
+		result_data.message = "Party was defeated or retreated from combat!"
+		result_data.event_type = "combat_retreat"
+	
+	# Resume exploration
+	current_state = ExplorationState.EXPLORING
+	pending_battle_tile = null
+	
+	# Emit the step result
+	exploration_step_complete.emit(result_data)
 
 func _create_step_result(message: String) -> Dictionary:
 	return {

@@ -387,7 +387,7 @@ func _on_exploration_timer():
 
 # NEW: Monster encounter handler
 func _on_monster_encounter(encounter_data: Dictionary):
-	"""Handle when the exploration encounters a monster"""
+	"""Handle when the exploration encounters a monster or boss"""
 	print("Monster encounter triggered!")
 	print("Encounter data: ", encounter_data)
 	
@@ -399,24 +399,36 @@ func _on_monster_encounter(encounter_data: Dictionary):
 	var monsters = []
 	var monster_count = encounter_data.get("monster_count", 1)
 	var monster_level = encounter_data.get("monster_level", 1)
+	var is_boss = encounter_data.get("is_boss", false)
 	
-	for i in monster_count:
-		var monster = MonsterResource.generate_random_monster(monster_level)
-		monsters.append(monster)
-		print("Generated monster: %s (Level %d)" % [monster.name, monster.level])
+	if is_boss:
+		# Generate a single, powerful boss monster
+		var boss = MonsterResource.generate_random_monster(monster_level * 2)  # Bosses are stronger
+		boss.name = "Boss " + boss.name
+		monsters.append(boss)
+		print("Generated boss: %s (Level %d)" % [boss.name, boss.level])
+	else:
+		# Generate regular monsters
+		for i in monster_count:
+			var monster = MonsterResource.generate_random_monster(monster_level)
+			monsters.append(monster)
+			print("Generated monster: %s (Level %d)" % [monster.name, monster.level])
 	
 	# Create and show battle window
 	current_battle_window = battle_window_scene.instantiate()
 	add_child(current_battle_window)
 	
-	# Setup the battle
+	# Setup the battle with descriptive names
 	var encounter_name = "Dungeon Encounter"
-	if monster_count == 1:
-		encounter_name = "vs %s" % monsters[0].name
+	if is_boss:
+		encounter_name = "BOSS: %s (Level %d)" % [monsters[0].name, monster_level]
+	elif monster_count == 1:
+		encounter_name = "vs %s (Level %d)" % [monsters[0].name, monster_level]
 	else:
-		encounter_name = "vs %d Monsters" % monster_count
+		encounter_name = "vs %d Level %d Monsters" % [monster_count, monster_level]
 	
-	current_battle_window.setup_battle(Game.roster, monsters, encounter_name)
+	# Setup battle asynchronously
+	await current_battle_window.setup_battle(Game.roster, monsters, encounter_name)
 	current_battle_window.battle_window_closed.connect(_on_battle_finished)
 	current_battle_window.show_battle()
 	
@@ -434,9 +446,15 @@ func _on_battle_finished(battle_result: Dictionary):
 	# Resume exploration
 	exploration_paused = false
 	
-	# Tell the visual explorer the battle result
+	# Tell the visual explorer the battle result with better formatting
 	if visual_explorer:
-		visual_explorer.resolve_monster_encounter(battle_result)
+		var formatted_result = {
+			"victory": battle_result.get("victory", false),
+			"completed": battle_result.get("completed", true),
+			"living_players": battle_result.get("living_players", 0),
+			"living_enemies": battle_result.get("living_enemies", 0)
+		}
+		visual_explorer.resolve_monster_encounter(formatted_result)
 	
 	# Resume exploration timer if still exploring
 	if visual_explorer.is_exploring():

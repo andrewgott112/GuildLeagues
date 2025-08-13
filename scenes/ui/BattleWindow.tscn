@@ -4,7 +4,8 @@
 
 [node name="BattleWindow" type="AcceptDialog"]
 title = "Combat!"
-size = Vector2i(700, 500)
+position = Vector2i(0, 36)
+size = Vector2i(700, 400)
 visible = true
 script = ExtResource("1_3rl8d")
 
@@ -62,6 +63,7 @@ text = "Your Party"
 
 [node name="PlayersScroll" type="ScrollContainer" parent="MainContainer/MainVBox/CombatantsSection/PlayersPanel"]
 layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
 [node name="PlayersList" type="VBoxContainer" parent="MainContainer/MainVBox/CombatantsSection/PlayersPanel/PlayersScroll"]
@@ -78,11 +80,12 @@ theme_override_colors/font_color = Color(0.823529, 0.266667, 0.278431, 1)
 theme_override_font_sizes/font_size = 18
 text = "Enemies"
 
-[node name="ScrollContainer" type="ScrollContainer" parent="MainContainer/MainVBox/CombatantsSection/EnemiesPanel"]
+[node name="EnemyScroll" type="ScrollContainer" parent="MainContainer/MainVBox/CombatantsSection/EnemiesPanel"]
 layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="EnemiesList" type="VBoxContainer" parent="MainContainer/MainVBox/CombatantsSection/EnemiesPanel/ScrollContainer"]
+[node name="EnemiesList" type="VBoxContainer" parent="MainContainer/MainVBox/CombatantsSection/EnemiesPanel/EnemyScroll"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
@@ -97,6 +100,7 @@ text = "Battle Log"
 
 [node name="LogScroll" type="ScrollContainer" parent="MainContainer/MainVBox/LogSection"]
 layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
 [node name="LogText" type="RichTextLabel" parent="MainContainer/MainVBox/LogSection/LogScroll"]
