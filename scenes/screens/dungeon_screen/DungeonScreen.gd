@@ -4,6 +4,7 @@ extends Control
 const DungeonGenerator = preload("res://scripts/systems/dungeon_generator.gd")
 const DungeonResource = preload("res://resources/Dungeon.gd")
 const VisualExploration = preload("res://scripts/systems/visual_exploration.gd")
+const MonsterResource = preload("res://resources/Monster.gd")
 
 @onready var dungeon_grid: GridContainer = $Margin/Column/DungeonPanel/ScrollContainer/GridContainer
 @onready var dungeon_info: Label = $Margin/Column/TopBar/DungeonInfo
@@ -22,6 +23,11 @@ var tile_buttons: Array = []
 var exploration_timer: Timer
 var total_gold_found: int = 0
 var total_gold_collected: int = 0  # NEW: Track actual gold collected vs left behind
+
+# Battle system integration
+var battle_window_scene = preload("res://scenes/ui/BattleWindow.tscn")
+var current_battle_window = null
+var exploration_paused: bool = false
 
 const TILE_SIZE = 32
 
@@ -42,6 +48,7 @@ func _ready():
 	# Connect visual exploration signals
 	visual_explorer.exploration_step_complete.connect(_on_step_complete)
 	visual_explorer.exploration_finished.connect(_on_exploration_finished)
+	visual_explorer.monster_encounter.connect(_on_monster_encounter)  # NEW: Monster encounter signal
 	
 	# Setup UI
 	_setup_generation_options()
@@ -80,11 +87,13 @@ func _generate_new_dungeon():
 	total_gold_found = 0
 	total_gold_collected = 0
 	exploration_timer.stop()
+	exploration_paused = false
 	
 	# Create new visual explorer
 	visual_explorer = VisualExploration.new()
 	visual_explorer.exploration_step_complete.connect(_on_step_complete)
 	visual_explorer.exploration_finished.connect(_on_exploration_finished)
+	visual_explorer.monster_encounter.connect(_on_monster_encounter)  # NEW: Connect monster signal
 	
 	_update_display()
 	print("Generated: " + current_dungeon.name)
@@ -123,7 +132,9 @@ func _update_dungeon_info():
 		treasure_count
 	]
 	
-	if visual_explorer.is_exploring():
+	if exploration_paused:
+		info_text += "\n--- COMBAT IN PROGRESS ---"
+	elif visual_explorer.is_exploring():
 		var summary = visual_explorer.get_exploration_summary()
 		info_text += "\n--- EXPLORING ---"
 		info_text += "\nSteps: %d | Tiles: %d" % [summary.moves_made, summary.tiles_explored]
@@ -193,6 +204,9 @@ func _update_explore_button():
 	if Game.roster.is_empty():
 		explore_btn.disabled = true
 		explore_btn.text = "Need Party"
+	elif exploration_paused:
+		explore_btn.disabled = true
+		explore_btn.text = "Combat Active"
 	elif visual_explorer.is_exploring():
 		explore_btn.disabled = true
 		explore_btn.text = "Exploring..."
@@ -333,8 +347,8 @@ func _on_explore_pressed():
 		print("No party to explore with!")
 		return
 		
-	if visual_explorer.is_exploring() or visual_explorer.is_finished():
-		print("Already exploring or finished!")
+	if visual_explorer.is_exploring() or visual_explorer.is_finished() or exploration_paused:
+		print("Already exploring, finished, or in combat!")
 		return
 	
 	print("Starting visual exploration...")
@@ -352,12 +366,17 @@ func _on_back_pressed():
 	if exploration_timer:
 		exploration_timer.stop()
 	
+	# Close any active battle window
+	if current_battle_window:
+		current_battle_window.queue_free()
+		current_battle_window = null
+	
 	Game.goto(Game.Phase.GUILD)
 	get_tree().change_scene_to_file("res://scenes/screens/guild_screen/guild_screen.tscn")
 
 # Visual exploration integration
 func _on_exploration_timer():
-	if not visual_explorer.is_exploring():
+	if not visual_explorer.is_exploring() or exploration_paused:
 		exploration_timer.stop()
 		return
 	
@@ -365,6 +384,65 @@ func _on_exploration_timer():
 	
 	if visual_explorer.is_finished():
 		exploration_timer.stop()
+
+# NEW: Monster encounter handler
+func _on_monster_encounter(encounter_data: Dictionary):
+	"""Handle when the exploration encounters a monster"""
+	print("Monster encounter triggered!")
+	print("Encounter data: ", encounter_data)
+	
+	# Pause exploration
+	exploration_paused = true
+	exploration_timer.stop()
+	
+	# Generate monsters for the encounter
+	var monsters = []
+	var monster_count = encounter_data.get("monster_count", 1)
+	var monster_level = encounter_data.get("monster_level", 1)
+	
+	for i in monster_count:
+		var monster = MonsterResource.generate_random_monster(monster_level)
+		monsters.append(monster)
+		print("Generated monster: %s (Level %d)" % [monster.name, monster.level])
+	
+	# Create and show battle window
+	current_battle_window = battle_window_scene.instantiate()
+	add_child(current_battle_window)
+	
+	# Setup the battle
+	var encounter_name = "Dungeon Encounter"
+	if monster_count == 1:
+		encounter_name = "vs %s" % monsters[0].name
+	else:
+		encounter_name = "vs %d Monsters" % monster_count
+	
+	current_battle_window.setup_battle(Game.roster, monsters, encounter_name)
+	current_battle_window.battle_window_closed.connect(_on_battle_finished)
+	current_battle_window.show_battle()
+	
+	_update_display()
+
+func _on_battle_finished(battle_result: Dictionary):
+	"""Handle when a battle is finished"""
+	print("Battle finished with result: ", battle_result)
+	
+	# Clean up battle window
+	if current_battle_window:
+		current_battle_window.queue_free()
+		current_battle_window = null
+	
+	# Resume exploration
+	exploration_paused = false
+	
+	# Tell the visual explorer the battle result
+	if visual_explorer:
+		visual_explorer.resolve_monster_encounter(battle_result)
+	
+	# Resume exploration timer if still exploring
+	if visual_explorer.is_exploring():
+		exploration_timer.start()
+	
+	_update_display()
 
 func _on_step_complete(result: Dictionary):
 	print("Exploration step: %s" % result.message)

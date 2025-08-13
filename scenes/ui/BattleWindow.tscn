@@ -1,0 +1,125 @@
+[gd_scene load_steps=2 format=3 uid="uid://7y58lon7swp8"]
+
+[ext_resource type="Script" uid="uid://bjkxmc8afkfh" path="res://scenes/ui/battle_window.gd" id="1_3rl8d"]
+
+[node name="BattleWindow" type="AcceptDialog"]
+title = "Combat!"
+size = Vector2i(700, 500)
+visible = true
+script = ExtResource("1_3rl8d")
+
+[node name="MainContainer" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -49.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="MainVBox" type="VBoxContainer" parent="MainContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="HeaderSection" type="VBoxContainer" parent="MainContainer/MainVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BattleTitle" type="Label" parent="MainContainer/MainVBox/HeaderSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Combat Encounter"
+
+[node name="BattleStatus" type="Label" parent="MainContainer/MainVBox/HeaderSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Press \"Start Battle\" to Begin Combat"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/MainVBox/HeaderSection"]
+layout_mode = 2
+
+[node name="CombatantsSection" type="VBoxContainer" parent="MainContainer/MainVBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="PlayersPanel" type="VBoxContainer" parent="MainContainer/MainVBox/CombatantsSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlayersTitle" type="Label" parent="MainContainer/MainVBox/CombatantsSection/PlayersPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.337255, 0.792157, 0.341176, 1)
+theme_override_font_sizes/font_size = 18
+text = "Your Party"
+
+[node name="PlayersScroll" type="ScrollContainer" parent="MainContainer/MainVBox/CombatantsSection/PlayersPanel"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="PlayersList" type="VBoxContainer" parent="MainContainer/MainVBox/CombatantsSection/PlayersPanel/PlayersScroll"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="EnemiesPanel" type="VBoxContainer" parent="MainContainer/MainVBox/CombatantsSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EnemiesTitle" type="Label" parent="MainContainer/MainVBox/CombatantsSection/EnemiesPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.823529, 0.266667, 0.278431, 1)
+theme_override_font_sizes/font_size = 18
+text = "Enemies"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainContainer/MainVBox/CombatantsSection/EnemiesPanel"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="EnemiesList" type="VBoxContainer" parent="MainContainer/MainVBox/CombatantsSection/EnemiesPanel/ScrollContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="LogSection" type="VBoxContainer" parent="MainContainer/MainVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="MainContainer/MainVBox/LogSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Battle Log"
+
+[node name="LogScroll" type="ScrollContainer" parent="MainContainer/MainVBox/LogSection"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="LogText" type="RichTextLabel" parent="MainContainer/MainVBox/LogSection/LogScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+bbcode_enabled = true
+text = "Waiting to Start Battle..."
+fit_content = true
+
+[node name="ButtonsSection" type="HBoxContainer" parent="MainContainer/MainVBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StartBattleBtn" type="Button" parent="MainContainer/MainVBox/ButtonsSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Start Battle"
+
+[node name="Control" type="Control" parent="MainContainer/MainVBox/ButtonsSection"]
+layout_mode = 2
+
+[node name="CloseBtn" type="Button" parent="MainContainer/MainVBox/ButtonsSection"]
+layout_mode = 2
+text = "Close
+"
