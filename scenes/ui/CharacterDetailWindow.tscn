@@ -1,0 +1,224 @@
+[gd_scene load_steps=2 format=3 uid="uid://df8uqa3uneeq2"]
+
+[ext_resource type="Script" uid="uid://bx6oi81whbi20" path="res://scenes/ui/character_detail_window.gd" id="1_4rnus"]
+
+[node name="CharacterDetailWindow" type="AcceptDialog"]
+title = "Character Details"
+size = Vector2i(400, 500)
+visible = true
+script = ExtResource("1_4rnus")
+
+[node name="MainContainer" type="MarginContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 392.0
+offset_bottom = 451.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainContainer"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ContentVBox" type="VBoxContainer" parent="MainContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+
+[node name="HeaderSection" type="VBoxContainer" parent="MainContainer/ScrollContainer/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CharacterName" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/HeaderSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Character Name"
+
+[node name="RoleInfo" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/HeaderSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Navigator - Specializes in exploration"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/ScrollContainer/ContentVBox/HeaderSection"]
+layout_mode = 2
+
+[node name="CoreStatsSection" type="VBoxContainer" parent="MainContainer/ScrollContainer/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CoreStatsTitle" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.379009, 0.572699, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "Core Stats"
+
+[node name="CoreStatsGrid" type="GridContainer" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="AttackLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "Attack:"
+
+[node name="AttackValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "125"
+
+[node name="DefenseLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "Defense:"
+
+[node name="DefenseValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "125"
+
+[node name="HealthLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "Health:"
+
+[node name="HealthValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "125"
+
+[node name="RoleStatLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "Navigation:"
+
+[node name="RoleStatValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection/CoreStatsGrid"]
+layout_mode = 2
+text = "125"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/ScrollContainer/ContentVBox/CoreStatsSection"]
+layout_mode = 2
+
+[node name="BattleSkillsSection" type="VBoxContainer" parent="MainContainer/ScrollContainer/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BattleSkillsTitle" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/BattleSkillsSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.997354, 0.627863, 0.351459, 1)
+theme_override_font_sizes/font_size = 18
+text = "Battle Skills"
+
+[node name="BattleSkillsGrid" type="GridContainer" parent="MainContainer/ScrollContainer/ContentVBox/BattleSkillsSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="ObserveLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/BattleSkillsSection/BattleSkillsGrid"]
+layout_mode = 2
+text = "Observe:"
+
+[node name="ObserveValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/BattleSkillsSection/BattleSkillsGrid"]
+layout_mode = 2
+text = "125"
+
+[node name="DecideLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/BattleSkillsSection/BattleSkillsGrid"]
+layout_mode = 2
+text = "Decide:"
+
+[node name="DecideValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/BattleSkillsSection/BattleSkillsGrid"]
+layout_mode = 2
+text = "125"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/ScrollContainer/ContentVBox/BattleSkillsSection"]
+layout_mode = 2
+
+[node name="CombatRecordSection" type="VBoxContainer" parent="MainContainer/ScrollContainer/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CombatRecordTitle" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.21268, 0.159696, 1)
+theme_override_font_sizes/font_size = 18
+text = "Combat Record"
+
+[node name="CombatRecordGrid" type="GridContainer" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="MonstersKilledLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection/CombatRecordGrid"]
+layout_mode = 2
+text = "Monsters Killed:"
+
+[node name="MonstersKilledValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection/CombatRecordGrid"]
+layout_mode = 2
+text = "0"
+
+[node name="BattlesWonLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection/CombatRecordGrid"]
+layout_mode = 2
+text = "Battles Won:"
+
+[node name="BattleWonValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection/CombatRecordGrid"]
+layout_mode = 2
+text = "0"
+
+[node name="BattlesFoughtLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection/CombatRecordGrid"]
+layout_mode = 2
+text = "Battles Fought:"
+
+[node name="BattleFoughtValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection/CombatRecordGrid"]
+layout_mode = 2
+text = "0"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/ScrollContainer/ContentVBox/CombatRecordSection"]
+layout_mode = 2
+
+[node name="EconomicSection" type="VBoxContainer" parent="MainContainer/ScrollContainer/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EconomicTitle" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/EconomicSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(3.56168e-06, 0.615319, 1.73271e-06, 1)
+theme_override_font_sizes/font_size = 18
+text = "Economic Info"
+
+[node name="EconomicGrid" type="GridContainer" parent="MainContainer/ScrollContainer/ContentVBox/EconomicSection"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="WageLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/EconomicSection/EconomicGrid"]
+layout_mode = 2
+text = "Wage:"
+
+[node name="WageValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/EconomicSection/EconomicGrid"]
+layout_mode = 2
+text = "0"
+
+[node name="ExperienceLabel" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/EconomicSection/EconomicGrid"]
+layout_mode = 2
+text = "Experience:"
+
+[node name="ExperienceValue" type="Label" parent="MainContainer/ScrollContainer/ContentVBox/EconomicSection/EconomicGrid"]
+layout_mode = 2
+text = "1"
+
+[node name="HSeparator" type="HSeparator" parent="MainContainer/ScrollContainer/ContentVBox/EconomicSection"]
+layout_mode = 2
+
+[node name="ButtonContainer" type="HBoxContainer" parent="MainContainer/ScrollContainer/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CloseButton" type="Button" parent="MainContainer/ScrollContainer/ContentVBox/ButtonContainer"]
+layout_mode = 2
+text = "Close"

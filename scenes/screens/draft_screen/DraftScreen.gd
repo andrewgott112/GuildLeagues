@@ -1,3 +1,4 @@
+# scenes/screens/draft_screen/DraftScreen.gd
 extends Control
 
 # ── Types / systems ──────────────────────────────────────────────────────────
@@ -30,11 +31,10 @@ var roles: Array[RoleResource] = []
 var _busy: bool = false           # re-entrancy guard
 
 # ── Fixed column widths (px) ─────────────────────────────────────────────────
-const W_NAME     := 220
-const W_ROLE     := 120
-const W_STAT     := 60      # ATK / DEF / HP
-const W_ROLESTAT := 180
-const W_WAGE     := 80
+const W_NAME     := 280
+const W_ROLE     := 140
+const W_WAGE     := 100
+const W_DETAILS  := 80      # Details button column
 const W_BTN      := 96
 
 const ROW_H    := 36
@@ -59,7 +59,6 @@ func _log_state(prefix := "") -> void:
 		done = Draft.is_done(state)
 
 	_log("%s pros=%s pick_index=%s done=%s" % [prefix, str(pros), str(pi), str(done)])
-
 
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 func _ready() -> void:
@@ -87,10 +86,6 @@ func _ready() -> void:
 	ai_timer.one_shot = true
 	ai_timer.autostart = false
 	ai_timer.timeout.connect(_on_ai_timer_timeout)
-
-	#_sync_list_width()
-	#scroll.resized.connect(_sync_list_width)
-	#resized.connect(_sync_list_width)
 
 	_refresh()
 
@@ -145,11 +140,8 @@ func _make_header_row() -> HBoxContainer:
 	var header := _row_fixed(HEADER_H, SEP_X)
 	header.add_child(_header_label("Name",      W_NAME, HORIZONTAL_ALIGNMENT_LEFT))
 	header.add_child(_header_label("Role",      W_ROLE))
-	header.add_child(_header_label("ATK",       W_STAT))
-	header.add_child(_header_label("DEF",       W_STAT))
-	header.add_child(_header_label("HP",        W_STAT))
-	header.add_child(_header_label("Role Stat", W_ROLESTAT, HORIZONTAL_ALIGNMENT_LEFT))
 	header.add_child(_header_label("Wage",      W_WAGE))
+	header.add_child(_header_label("Details",   W_DETAILS))
 	header.add_child(_flex_spacer())
 	var lbl_action := _header_label("Action", 0, HORIZONTAL_ALIGNMENT_CENTER)
 	header.add_child(_center_cell(lbl_action, W_BTN))
@@ -162,15 +154,21 @@ func _make_row(a: AdventurerResource, idx: int, player_turn: bool) -> HBoxContai
 	var row := _row_fixed()
 
 	var role_name := a.role.display_name if a.role else "—"
-	var role_stat_label := str(a.role.role_stat_name) if a.role else "stat"
 
 	row.add_child(_cell_label(a.name,                           W_NAME, HORIZONTAL_ALIGNMENT_LEFT))
 	row.add_child(_cell_label(role_name,                        W_ROLE))
-	row.add_child(_cell_label(str(a.attack),                    W_STAT))
-	row.add_child(_cell_label(str(a.defense),                   W_STAT))
-	row.add_child(_cell_label(str(a.hp),                        W_STAT))
-	row.add_child(_cell_label("%s %d" % [role_stat_label, a.role_stat], W_ROLESTAT, HORIZONTAL_ALIGNMENT_LEFT))
 	row.add_child(_cell_label("%dg" % a.wage,                   W_WAGE))
+	
+	# Details button
+	var details_btn := Button.new()
+	details_btn.text = "View"
+	details_btn.custom_minimum_size = Vector2(70, 28)
+	details_btn.pressed.connect(func():
+		_log("details btn pressed for %s" % a.name)
+		_show_character_details(a)
+	)
+	row.add_child(_center_cell(details_btn, W_DETAILS))
+	
 	row.add_child(_flex_spacer())
 
 	var pick_idx := idx  # stable for this row
@@ -228,15 +226,12 @@ func _refresh() -> void:
 	for i in state.prospects.size():
 		list_box.add_child(_make_row(state.prospects[i], i, is_player_turn))
 
-	# drive AI after a short delay, only when not busy
-	# in _refresh(), replace the AI block with:
 	if !_busy and !Draft.is_done(state) and !Draft.is_player_turn(state, PLAYER_TEAM):
 		if ai_timer.is_stopped():
 			_log("AI timer start (0.35s)")
-			ai_timer.start(0.35) # one shot
+			ai_timer.start(0.35)
 		else:
 			_log("AI timer already running")
-	
 
 	_log("refresh() end")
 
@@ -271,7 +266,6 @@ func _on_finish_pressed() -> void:
 	Game.goto(Game.Phase.GUILD)
 	get_tree().change_scene_to_file("res://scenes/screens/guild_screen/guild_screen.tscn")
 
-
 func _on_ai_timer_timeout() -> void:
 	_log("_on_ai_timer_timeout")
 	if _busy: _log("AI skipped: busy"); return
@@ -285,7 +279,6 @@ func _on_ai_timer_timeout() -> void:
 
 	if idx < 0 or idx >= state.prospects.size():
 		_log("AI pick invalid; scheduling retry")
-		# retry quickly in case the pool changed this frame
 		ai_timer.start(0.2)
 		return
 
@@ -296,8 +289,46 @@ func _on_ai_timer_timeout() -> void:
 	_log_state("post AI Draft.pick")
 	call_deferred("_after_pick_safe")
 
-
 # ── Helpers ─────────────────────────────────────────────────────────────────
+func _show_character_details(character: AdventurerResource) -> void:
+	_log("Attempting to show details for: %s" % character.name)
+	
+	# Load and show the character detail window
+	var detail_scene_path = "res://scenes/ui/CharacterDetailWindow.tscn"
+	
+	if not ResourceLoader.exists(detail_scene_path):
+		print("ERROR: Character detail window scene not found at: " + detail_scene_path)
+		print("Please make sure you have created the scene file at that location")
+		# Fallback: print to console
+		print("=== CHARACTER DETAILS ===")
+		print("Name: %s" % character.name)
+		print("Role: %s" % (character.role.display_name if character.role else "None"))
+		print("Attack: %d" % character.attack)
+		print("Defense: %d" % character.defense)
+		print("HP: %d" % character.hp)
+		print("Role Stat: %d" % character.role_stat)
+		print("Observe: %d" % character.observe_skill)
+		print("Decide: %d" % character.decide_skill)
+		print("Wage: %d" % character.wage)
+		print("========================")
+		return
+	
+	print("Loading character detail window...")
+	var detail_scene = load(detail_scene_path)
+	var detail_window = detail_scene.instantiate()
+	
+	print("Adding window to scene tree...")
+	add_child(detail_window)
+	
+	print("Calling show_character...")
+	detail_window.show_character(character)
+	
+	# Auto-cleanup when the window is closed
+	detail_window.visibility_changed.connect(func():
+		if not detail_window.visible:
+			detail_window.queue_free()
+	)
+
 func _picks_left_for(team_i: int) -> int:
 	var total_for_team := 0
 	for t in state.order:
@@ -321,28 +352,27 @@ func _generate_prospects(n: int) -> Array:
 	if roles.is_empty():
 		push_error("No roles loaded, cannot generate prospects.")
 		return out
+		
 	for i in n:
-		var role: RoleResource = roles.pick_random()
-		var a: AdventurerResource = AdventurerResource.new()
-		a.role = role
-		if a.has_method("apply_role_defaults"): a.apply_role_defaults()
-		a.attack    += randi_range(-1, 1)
-		a.defense   += randi_range(-1, 1)
-		a.hp        += randi_range(-2, 2)
-		a.role_stat += randi_range(0, 2)
-		a.name = _random_name()
-		a.wage = _calc_wage(a)
+		# Use the new random prospect generation
+		var a: AdventurerResource = AdventurerResource.generate_random_prospect(roles)
 		out.append(a)
+		
 	return out
 
 func _calc_wage(a) -> int:
 	var base: float = 4.0
 	var power: float = (a.attack * 1.0) + (a.defense * 0.7) + (a.hp * 0.15) + (a.role_stat * 0.5)
-	return clampi(int(round(base + power / 8.0)), 3, 12)
+	
+	# NEW: Factor in battle skills for wage calculation
+	var battle_skill_bonus = (a.observe_skill + a.decide_skill) * 0.1
+	power += battle_skill_bonus
+	
+	return clampi(int(round(base + power / 8.0)), 3, 15)  # Slightly higher max wage
 
 func _random_name() -> String:
-	var first = ["Garruk","Eryndra","Milo","Serah","Tamsin","Borin","Nyx","Quinn","Lira"]
-	var last  = ["Stonefist","Dawnstar","Reed","Voss","Kestrel","Blackwood","Ashen","Thorne","Vale"]
+	var first = ["Garruk","Eryndra","Milo","Serah","Tamsin","Borin","Nyx","Quinn","Lira","Theron","Kira","Vex"]
+	var last  = ["Stonefist","Dawnstar","Reed","Voss","Kestrel","Blackwood","Ashen","Thorne","Vale","Swift","Ward","Kane"]
 	return "%s %s" % [first.pick_random(), last.pick_random()]
 
 func _sync_list_width() -> void:
@@ -359,7 +389,6 @@ func _process(_dt: float) -> void:
 	if _busy: return
 	if Draft.is_done(state): return
 	if Draft.is_player_turn(state, PLAYER_TEAM): return
-	# AI turn: ensure the timer is running
 	if ai_timer.is_stopped():
 		_log("AI watchdog starting timer")
 		ai_timer.start(0.35)
