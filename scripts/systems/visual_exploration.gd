@@ -289,17 +289,33 @@ func _head_to_exit():
 	print("Party heading to exit at (%d, %d)" % [exit_position.x, exit_position.y])
 
 func _calculate_navigation_skill(party_data: Array) -> int:
-	var total_navigation = 0
-	var navigator_bonus = 0
+	var navigation_score = 0
+	
+	print("=== Simple Navigation Calculation (Exploration) ===")
 	
 	for adventurer in party_data:
-		if adventurer.role and str(adventurer.role.role_stat_name).to_lower() in ["navigation", "navigate"]:
-			total_navigation += adventurer.role_stat * 2
-			navigator_bonus += 5
+		var is_navigator = false
+		
+		# Check by role ID (most reliable method)
+		if adventurer.role and adventurer.role.id == &"navigator":
+			is_navigator = true
+		# Fallback: check by role_stat_name
+		elif adventurer.role and adventurer.role.role_stat_name:
+			var role_stat_name_str = str(adventurer.role.role_stat_name).to_lower()
+			if role_stat_name_str in ["navigation", "navigate"]:
+				is_navigator = true
+		
+		if is_navigator:
+			navigation_score += adventurer.role_stat
+			print("Navigator %s contributes: %d" % [adventurer.name, adventurer.role_stat])
 		else:
-			total_navigation += max(1, adventurer.role_stat / 2)
+			var role_name = adventurer.role.display_name if adventurer.role else "No Role"
+			print("%s (%s): 0 (not a navigator)" % [adventurer.name, role_name])
 	
-	return total_navigation + navigator_bonus + party_data.size() * 2
+	print("Final navigation score: %d" % navigation_score)
+	print("===============================================")
+	
+	return navigation_score
 
 func _calculate_party_strength(party_data: Array) -> int:
 	var total_strength = 0

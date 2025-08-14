@@ -34,9 +34,20 @@ class Combatant:
 	var defending: bool = false
 	var fled: bool = false
 	
+	# Track original HP for adventurers
+	var original_hp: int = 0
+	
 	func _init(combatant_name: String, is_player: bool = true):
 		name = combatant_name
 		is_player_controlled = is_player
+	
+	func setup_adventurer(adv: AdventurerResource):
+		adventurer = adv
+		original_hp = adv.hp  # Store original HP
+	
+	func setup_monster(mon: MonsterResource):
+		monster = mon
+		monster.reset_for_battle()
 	
 	func get_current_hp() -> int:
 		if adventurer:
@@ -47,7 +58,7 @@ class Combatant:
 	
 	func get_max_hp() -> int:
 		if adventurer:
-			return adventurer.hp  # Adventurers don't have separate max_hp currently
+			return original_hp  # Use the stored original HP
 		elif monster:
 			return monster.max_hp
 		return 0
@@ -125,14 +136,13 @@ func start_battle(player_party: Array, enemies: Array) -> bool:
 	# Setup player combatants
 	for adventurer in player_party:
 		var combatant = Combatant.new(adventurer.name, true)
-		combatant.adventurer = adventurer
+		combatant.setup_adventurer(adventurer)
 		combatants.append(combatant)
 	
 	# Setup enemy combatants  
 	for monster in enemies:
 		var combatant = Combatant.new(monster.name, false)
-		combatant.monster = monster
-		monster.reset_for_battle()  # Reset monster state
+		combatant.setup_monster(monster)
 		combatants.append(combatant)
 	
 	if combatants.is_empty():

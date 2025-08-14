@@ -167,32 +167,51 @@ func _update_party_info():
 	var total_hp = 0
 	var navigation_score = 0
 	
+	print("=== Simple Navigation Calculation ===")
+	
 	for adventurer in Game.roster:
 		total_attack += adventurer.attack
 		total_defense += adventurer.defense
 		total_hp += adventurer.hp
 		
-		# Calculate navigation contribution
-		if adventurer.role and str(adventurer.role.role_stat_name).to_lower() in ["navigation", "navigate"]:
-			navigation_score += adventurer.role_stat * 2
+		# Only count navigation skill from actual navigators
+		var is_navigator = false
+		
+		# Check by role ID (most reliable method)
+		if adventurer.role and adventurer.role.id == &"navigator":
+			is_navigator = true
+		# Fallback: check by role_stat_name
+		elif adventurer.role and adventurer.role.role_stat_name:
+			var role_stat_name_str = str(adventurer.role.role_stat_name).to_lower()
+			if role_stat_name_str in ["navigation", "navigate"]:
+				is_navigator = true
+		
+		if is_navigator:
+			navigation_score += adventurer.role_stat
+			print("Navigator %s contributes: %d" % [adventurer.name, adventurer.role_stat])
 		else:
-			navigation_score += max(1, adventurer.role_stat / 2)
+			var role_name = adventurer.role.display_name if adventurer.role else "No Role"
+			print("%s (%s): 0 (not a navigator)" % [adventurer.name, role_name])
 	
-	navigation_score += Game.roster.size() * 2
+	print("Total navigation score: %d" % navigation_score)
+	print("=====================================")
 	
 	var party_stats = "Party (%d): ATK %d | DEF %d | HP %d" % [
 		Game.roster.size(), total_attack, total_defense, total_hp
 	]
 	
+	# Simplified navigation rating based on pure skill
 	var nav_rating = "Poor"
-	if navigation_score >= 40: nav_rating = "Excellent"
-	elif navigation_score >= 25: nav_rating = "Good"
-	elif navigation_score >= 15: nav_rating = "Average"
+	if navigation_score >= 120: nav_rating = "Excellent"
+	elif navigation_score >= 80: nav_rating = "Good"
+	elif navigation_score >= 40: nav_rating = "Average"
+	elif navigation_score > 0: nav_rating = "Basic"
+	else: nav_rating = "None"
 	
 	var nav_info = "Navigation: %s (%d)" % [nav_rating, navigation_score]
 	
-	# NEW: Add carrying capacity info
-	nav_info += "\nCarrying Capacity: 100g"  # v0.1 flat cap
+	# Add carrying capacity info
+	nav_info += "\nCarrying Capacity: 100g"
 	
 	if visual_explorer.is_exploring():
 		var party_pos = visual_explorer.get_party_position()
