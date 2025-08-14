@@ -2,6 +2,10 @@
 extends Node
 class_name PlayoffSystem
 
+# Preload necessary resources
+const AITeamResource = preload("res://resources/AITeam.gd")
+const AdventurerResource = preload("res://resources/Adventurer.gd")
+
 signal match_completed(match_result: Dictionary)
 signal round_completed(round_results: Array)
 signal tournament_completed(final_result: Dictionary)
@@ -23,18 +27,18 @@ enum MatchStatus {
 
 class Match:
 	var match_id: String
-	var team1: AITeamResource  # Includes player team
-	var team2: AITeamResource
+	var team1  # AITeamResource - remove typing for now
+	var team2  # AITeamResource - remove typing for now
 	var status: MatchStatus = MatchStatus.PENDING
-	var winner: AITeamResource = null
-	var loser: AITeamResource = null
+	var winner = null  # AITeamResource - remove typing for now
+	var loser = null   # AITeamResource - remove typing for now
 	var margin: int = 0  # Victory margin for rivalry/narrative purposes
 	var round_number: int = 0
 	var bracket_position: int = 0
 	var is_championship: bool = false
 	var match_narrative: String = ""  # For storytelling
 	
-	func _init(id: String, t1: AITeamResource, t2: AITeamResource, round: int = 0):
+	func _init(id: String, t1, t2, round: int = 0):
 		match_id = id
 		team1 = t1
 		team2 = t2
@@ -43,13 +47,13 @@ class Match:
 class Tournament:
 	var tournament_id: String
 	var format: TournamentFormat
-	var teams: Array[AITeamResource] = []
-	var matches: Array[Match] = []
+	var teams: Array = []  # Remove typing for now
+	var matches: Array = []  # Array[Match] - remove typing for now
 	var current_round: int = 0
 	var max_rounds: int = 0
 	var is_completed: bool = false
-	var champion: AITeamResource = null
-	var runner_up: AITeamResource = null
+	var champion = null  # AITeamResource - remove typing for now
+	var runner_up = null  # AITeamResource - remove typing for now
 	var tournament_narrative: String = ""
 	
 	func _init(id: String, fmt: TournamentFormat):
@@ -58,7 +62,7 @@ class Tournament:
 
 # Current tournament state
 var current_tournament: Tournament = null
-var player_team: AITeamResource = null  # Special team representing the player
+var player_team = null  # AITeamResource - remove typing for now
 var rng: RandomNumberGenerator
 
 # League settings
@@ -70,7 +74,7 @@ func _init():
 	rng.randomize()
 
 # Initialize a new tournament
-func create_tournament(teams: Array[AITeamResource], format: TournamentFormat = TournamentFormat.SINGLE_ELIMINATION) -> Tournament:
+func create_tournament(teams: Array, format: TournamentFormat = TournamentFormat.SINGLE_ELIMINATION) -> Tournament:
 	var tournament_id = "tournament_s%d" % season
 	current_tournament = Tournament.new(tournament_id, format)
 	current_tournament.teams = teams.duplicate()
@@ -85,7 +89,7 @@ func create_tournament(teams: Array[AITeamResource], format: TournamentFormat = 
 	return current_tournament
 
 # Create player team from roster
-func create_player_team(roster: Array[AdventurerResource], team_name: String = "Your Guild") -> AITeamResource:
+func create_player_team(roster: Array, team_name: String = "Your Guild"):
 	player_team = AITeamResource.new()
 	player_team.team_name = team_name
 	player_team.coach_name = "You"
@@ -122,9 +126,9 @@ func _setup_single_elimination():
 	for i in range(0, team_count, 2):
 		if i + 1 < team_count:
 			var match_id = "R1_M%d" % match_count
-			var match = Match.new(match_id, shuffled_teams[i], shuffled_teams[i + 1], 1)
-			match.bracket_position = match_count
-			current_tournament.matches.append(match)
+			var new_match = Match.new(match_id, shuffled_teams[i], shuffled_teams[i + 1], 1)
+			new_match.bracket_position = match_count
+			current_tournament.matches.append(new_match)
 			match_count += 1
 	
 	current_tournament.current_round = 1
@@ -139,71 +143,71 @@ func _setup_round_robin():
 	for i in range(teams.size()):
 		for j in range(i + 1, teams.size()):
 			var match_id = "RR_M%d" % match_count
-			var match = Match.new(match_id, teams[i], teams[j], 1)  # All matches in "round 1" for round robin
-			current_tournament.matches.append(match)
+			var new_match = Match.new(match_id, teams[i], teams[j], 1)  # All matches in "round 1" for round robin
+			current_tournament.matches.append(new_match)
 			match_count += 1
 	
 	current_tournament.current_round = 1
 
 # Get matches for current round
-func get_current_round_matches() -> Array[Match]:
+func get_current_round_matches() -> Array:
 	if not current_tournament:
 		return []
 	
-	var current_matches: Array[Match] = []
-	for match in current_tournament.matches:
-		if match.round_number == current_tournament.current_round and match.status == MatchStatus.PENDING:
-			current_matches.append(match)
+	var current_matches: Array = []
+	for match_item in current_tournament.matches:
+		if match_item.round_number == current_tournament.current_round and match_item.status == MatchStatus.PENDING:
+			current_matches.append(match_item)
 	
 	return current_matches
 
 # Get next match for player
-func get_next_player_match() -> Match:
+func get_next_player_match():
 	if not player_team:
 		return null
 	
 	var current_matches = get_current_round_matches()
-	for match in current_matches:
-		if match.team1 == player_team or match.team2 == player_team:
-			return match
+	for match_item in current_matches:
+		if match_item.team1 == player_team or match_item.team2 == player_team:
+			return match_item
 	
 	return null
 
 # Process a match result
-func complete_match(match: Match, winner: AITeamResource, battle_details: Dictionary = {}):
-	if match.status != MatchStatus.PENDING:
+func complete_match(match_item: Match, winner, battle_details: Dictionary = {}):
+	if match_item.status != MatchStatus.PENDING:
 		return
 	
-	match.status = MatchStatus.COMPLETED
-	match.winner = winner
-	match.loser = match.team1 if winner == match.team2 else match.team2
+	match_item.status = MatchStatus.COMPLETED
+	match_item.winner = winner
+	match_item.loser = match_item.team1 if winner == match_item.team2 else match_item.team2
 	
 	# Calculate margin based on battle details
 	if battle_details.has("team1_survivors") and battle_details.has("team2_survivors"):
 		var survivor_diff = abs(battle_details.team1_survivors - battle_details.team2_survivors)
-		match.margin = survivor_diff * 20  # Each surviving member = 20 margin points
+		match_item.margin = survivor_diff * 20  # Each surviving member = 20 margin points
 	else:
-		match.margin = rng.randi_range(5, 25)  # Default random margin
+		match_item.margin = rng.randi_range(5, 25)  # Default random margin
 	
 	# Update team records
-	match.winner.record_match_result(true, match.margin)
-	match.loser.record_match_result(false, match.margin)
+	match_item.winner.record_match_result(true, match_item.margin)
+	match_item.loser.record_match_result(false, match_item.margin)
 	
 	# Update rivalries
-	match.winner.update_rivalry(match.loser.team_id, true, match.margin)
-	match.loser.update_rivalry(match.winner.team_id, false, match.margin)
+	match_item.winner.update_rivalry(match_item.loser.team_id, true, match_item.margin)
+	match_item.loser.update_rivalry(match_item.winner.team_id, false, match_item.margin)
 	
 	# Generate match narrative
-	match.match_narrative = _generate_match_narrative(match, battle_details)
+	match_item.match_narrative = _generate_match_narrative(match_item, battle_details)
 	
-	print("Match completed: %s defeats %s (margin: %d)" % [match.winner.team_name, match.loser.team_name, match.margin])
+	print("Match completed: %s defeats %s (margin: %d)" % [match_item.winner.team_name, match_item.loser.team_name, match_item.margin])
 	
 	match_completed.emit({
-		"match": match,
+		"match": match_item,
 		"winner": winner,
-		"loser": match.loser,
-		"margin": match.margin,
-		"narrative": match.match_narrative
+		"loser": match_item.loser,
+		"margin": match_item.margin,
+		"narrative": match_item.match_narrative
 	})
 	
 	_check_round_completion()
@@ -216,9 +220,9 @@ func _check_round_completion():
 	if current_matches.is_empty():
 		# Round is complete
 		var round_results = []
-		for match in current_tournament.matches:
-			if match.round_number == current_tournament.current_round:
-				round_results.append(match)
+		for match_item in current_tournament.matches:
+			if match_item.round_number == current_tournament.current_round:
+				round_results.append(match_item)
 		
 		round_completed.emit(round_results)
 		
@@ -234,10 +238,10 @@ func _advance_single_elimination():
 		return
 	
 	# Get winners from current round
-	var winners: Array[AITeamResource] = []
-	for match in current_tournament.matches:
-		if match.round_number == current_tournament.current_round and match.status == MatchStatus.COMPLETED:
-			winners.append(match.winner)
+	var winners: Array = []
+	for match_item in current_tournament.matches:
+		if match_item.round_number == current_tournament.current_round and match_item.status == MatchStatus.COMPLETED:
+			winners.append(match_item.winner)
 	
 	if winners.size() <= 1:
 		_complete_tournament()
@@ -251,14 +255,14 @@ func _advance_single_elimination():
 	for i in range(0, winners.size(), 2):
 		if i + 1 < winners.size():
 			var match_id = "R%d_M%d" % [next_round, match_count]
-			var match = Match.new(match_id, winners[i], winners[i + 1], next_round)
-			match.bracket_position = match_count
+			var new_match = Match.new(match_id, winners[i], winners[i + 1], next_round)
+			new_match.bracket_position = match_count
 			
 			# Mark championship match
 			if next_round == current_tournament.max_rounds and winners.size() == 2:
-				match.is_championship = true
+				new_match.is_championship = true
 			
-			current_tournament.matches.append(match)
+			current_tournament.matches.append(new_match)
 			match_count += 1
 
 # Complete round robin
@@ -272,9 +276,9 @@ func _complete_tournament():
 	# Determine champion based on format
 	if current_tournament.format == TournamentFormat.SINGLE_ELIMINATION:
 		var championship_match = null
-		for match in current_tournament.matches:
-			if match.is_championship and match.status == MatchStatus.COMPLETED:
-				championship_match = match
+		for match_item in current_tournament.matches:
+			if match_item.is_championship and match_item.status == MatchStatus.COMPLETED:
+				championship_match = match_item
 				break
 		
 		if championship_match:
@@ -316,29 +320,29 @@ func _complete_tournament():
 	})
 
 # Generate narrative for a match
-func _generate_match_narrative(match: Match, battle_details: Dictionary) -> String:
+func _generate_match_narrative(match_item: Match, battle_details: Dictionary) -> String:
 	var narrative = ""
 	
 	# Rivalry context
-	if match.winner.rivalries.has(match.loser.team_id):
-		var rivalry = match.winner.rivalries[match.loser.team_id]
+	if match_item.winner.rivalries.has(match_item.loser.team_id):
+		var rivalry = match_item.winner.rivalries[match_item.loser.team_id]
 		if rivalry.intensity > 0.7:
 			narrative += "In a heated rivalry matchup, "
 		elif rivalry.intensity > 0.4:
 			narrative += "Continuing their competitive history, "
 	
 	# Match description based on margin
-	if match.margin > 20:
-		narrative += "%s dominated %s" % [match.winner.team_name, match.loser.team_name]
-	elif match.margin > 10:
-		narrative += "%s defeated %s convincingly" % [match.winner.team_name, match.loser.team_name]
+	if match_item.margin > 20:
+		narrative += "%s dominated %s" % [match_item.winner.team_name, match_item.loser.team_name]
+	elif match_item.margin > 10:
+		narrative += "%s defeated %s convincingly" % [match_item.winner.team_name, match_item.loser.team_name]
 	else:
-		narrative += "%s edged out %s in a close match" % [match.winner.team_name, match.loser.team_name]
+		narrative += "%s edged out %s in a close match" % [match_item.winner.team_name, match_item.loser.team_name]
 	
 	# Add championship context
-	if match.is_championship:
+	if match_item.is_championship:
 		narrative += " to claim the championship!"
-	elif match.round_number == current_tournament.max_rounds - 1:
+	elif match_item.round_number == current_tournament.max_rounds - 1:
 		narrative += " to advance to the championship!"
 	
 	return narrative
@@ -405,19 +409,19 @@ func get_bracket_data() -> Dictionary:
 	}
 
 # Simulate AI vs AI matches
-func simulate_ai_match(match: Match) -> AITeamResource:
-	var team1_strength = match.team1.get_team_strength()
-	var team2_strength = match.team2.get_team_strength()
+func simulate_ai_match(match_item: Match):
+	var team1_strength = match_item.team1.get_team_strength()
+	var team2_strength = match_item.team2.get_team_strength()
 	
 	# Add some randomness and personality factors
 	var team1_modifier = 1.0
 	var team2_modifier = 1.0
 	
 	# Apply personality modifiers
-	team1_modifier += match.team1.aggression * 0.1
-	team1_modifier += match.team1.experience * 0.15
-	team2_modifier += match.team2.aggression * 0.1
-	team2_modifier += match.team2.experience * 0.15
+	team1_modifier += match_item.team1.aggression * 0.1
+	team1_modifier += match_item.team1.experience * 0.15
+	team2_modifier += match_item.team2.aggression * 0.1
+	team2_modifier += match_item.team2.experience * 0.15
 	
 	# Add randomness (15% variance)
 	team1_modifier *= rng.randf_range(0.85, 1.15)
@@ -426,22 +430,22 @@ func simulate_ai_match(match: Match) -> AITeamResource:
 	var final_team1_strength = team1_strength * team1_modifier
 	var final_team2_strength = team2_strength * team2_modifier
 	
-	return match.team1 if final_team1_strength > final_team2_strength else match.team2
+	return match_item.team1 if final_team1_strength > final_team2_strength else match_item.team2
 
 # Auto-advance AI matches
 func process_ai_matches():
 	var ai_matches = []
 	var current_matches = get_current_round_matches()
 	
-	for match in current_matches:
-		if match.team1 != player_team and match.team2 != player_team:
-			ai_matches.append(match)
+	for match_item in current_matches:
+		if match_item.team1 != player_team and match_item.team2 != player_team:
+			ai_matches.append(match_item)
 	
-	for match in ai_matches:
-		var winner = simulate_ai_match(match)
+	for match_item in ai_matches:
+		var winner = simulate_ai_match(match_item)
 		var battle_details = {
 			"simulated": true,
 			"team1_survivors": rng.randi_range(1, 3),
 			"team2_survivors": rng.randi_range(0, 2)
 		}
-		complete_match(match, winner, battle_details)
+		complete_match(match_item, winner, battle_details)

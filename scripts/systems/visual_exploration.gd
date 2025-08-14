@@ -108,12 +108,18 @@ func step_exploration() -> Dictionary:
 	if current_state != ExplorationState.EXPLORING:
 		return exploration_progress
 	
+	# SAFETY CHECK: Hard limit to prevent infinite exploration
+	if moves_made > 100:  # Absolute maximum
+		_finish_exploration_early("Party exhausted - forced to exit")
+		return exploration_progress
+	
 	# Check if party decides to exit
 	if _should_party_exit():
 		if exit_found and exit_position != Vector2i(-1, -1):
 			_head_to_exit()
 		else:
-			_finish_exploration_early("Party decided to leave without finding exit")
+			# If no exit found but party wants to leave, end exploration
+			_finish_exploration_early("Party decided to leave (no exit found)")
 			return exploration_progress
 	
 	# Check if we have a path to follow
@@ -123,12 +129,24 @@ func step_exploration() -> Dictionary:
 	
 	# If still no path, exploration might be done
 	if current_path.is_empty():
-		print("No path found - finishing exploration")
-		_finish_exploration()
-		return exploration_progress
+		# Instead of continuing forever, be more decisive about ending
+		if exploration_targets.is_empty():
+			print("No path and no targets - finishing exploration")
+			if exit_found:
+				_head_to_exit()
+			else:
+				_finish_exploration_early("No more accessible areas to explore")
+			return exploration_progress
+		else:
+			# Try one more time to find any valid move
+			print("No path but have targets - trying emergency pathfinding...")
+			_emergency_pathfinding()
+			if current_path.is_empty():
+				print("Emergency pathfinding failed - ending exploration")
+				_finish_exploration_early("Unable to reach remaining areas")
+				return exploration_progress
 	
 	# Oscillation detection - track last few positions
-	@warning_ignore("untyped_declaration")
 	if not has_meta("recent_positions"):
 		set_meta("recent_positions", [])
 	
@@ -142,18 +160,22 @@ func step_exploration() -> Dictionary:
 		var recent_count = recent_positions.count(party_position)
 		if recent_count >= 2:
 			print("Oscillation detected! Party has been at (%d, %d) %d times recently" % [party_position.x, party_position.y, recent_count])
-			# Clear path to force recalculation with different logic
+			# Clear path and try emergency exit
 			current_path.clear()
-			# Clear recent positions to break the pattern
 			set_meta("recent_positions", [])
-			return _create_step_result("Party stops to reassess route")
+			if exit_found:
+				_head_to_exit()
+				return _create_step_result("Party breaks oscillation and heads to exit")
+			else:
+				_finish_exploration_early("Party stuck in loop - forced exit")
+				return exploration_progress
 	
 	party_position = next_pos
 	moves_made += 1
 	
-	# Track recent positions (keep last 8)
+	# Track recent positions (keep last 6 instead of 8)
 	recent_positions.append(party_position)
-	if recent_positions.size() > 8:
+	if recent_positions.size() > 6:
 		recent_positions.pop_front()
 	set_meta("recent_positions", recent_positions)
 
@@ -213,64 +235,82 @@ func _should_party_exit() -> bool:
 	var exit_score = 0.0
 	var reasons = []
 	
-	# Factor 1: Gold capacity
+	# HARD LIMITS - Always exit after these thresholds
+	if moves_made > 80:  # Hard cap - was too high before
+		decided_to_exit = true
+		return true
+	
+	if current_gold_carried >= gold_capacity:  # Always exit when full
+		decided_to_exit = true
+		return true
+	
+	# Factor 1: Gold capacity (more aggressive)
 	var gold_percentage = float(current_gold_carried) / float(gold_capacity)
-	if gold_percentage >= 1.0:
-		exit_score += 100.0  # Must exit if at capacity
-		reasons.append("carrying capacity reached")
-	elif gold_percentage >= 0.8:
-		exit_score += 50.0  # Strong incentive to exit
+	if gold_percentage >= 0.8:
+		exit_score += 60.0  # Increased from 50.0
 		reasons.append("heavy load")
 	elif gold_percentage >= 0.6:
-		exit_score += 20.0  # Moderate incentive
+		exit_score += 30.0  # Increased from 20.0
 		reasons.append("good haul")
+	elif gold_percentage >= 0.4:
+		exit_score += 15.0  # New threshold
+		reasons.append("some gold")
 	
-	# Factor 2: Navigation skill affects decision-making
-	var nav_factor = party_navigation / 40.0  # 0.0 to ~1.5
+	# Factor 2: Moves made (fatigue kicks in sooner)
+	if moves_made > 50:  # Reduced from 50
+		exit_score += 40.0  # Increased penalty
+		reasons.append("party exhaustion")
+	elif moves_made > 30:  # Reduced from 30  
+		exit_score += 20.0  # Increased penalty
+		reasons.append("getting tired")
+	elif moves_made > 20:
+		exit_score += 10.0  # New earlier threshold
 	
-	# Good navigators are more confident and explore longer
-	if party_navigation >= 35:
-		exit_score -= 15.0  # Expert navigators push further
-	elif party_navigation <= 15:
-		exit_score += 20.0  # Poor navigators get nervous
-		if moves_made > 20:
-			reasons.append("poor navigation")
-	
-	# Factor 3: Moves made (fatigue factor)
-	if moves_made > 50:
-		exit_score += 30.0
-		reasons.append("party fatigue")
-	elif moves_made > 30:
-		exit_score += 15.0
-	
-	# Factor 4: Retreat count (danger assessment)
+	# Factor 3: Retreat count (danger assessment) - more aggressive
 	var retreat_count = retreated_tiles.size()
-	if retreat_count >= 3:
-		exit_score += 40.0
-		reasons.append("too many dangerous encounters")
-	elif retreat_count >= 2:
-		exit_score += 20.0
-		reasons.append("dangerous area")
+	if retreat_count >= 2:  # Reduced from 3
+		exit_score += 50.0  # Increased from 40.0
+		reasons.append("too dangerous")
+	elif retreat_count >= 1:
+		exit_score += 25.0  # New threshold
+		reasons.append("dangerous encounters")
 	
-	# Factor 5: Target scarcity
-	if exploration_targets.size() <= 2 and visited_tiles.size() > 10:
-		exit_score += 25.0
+	# Factor 4: Target scarcity (more aggressive)
+	if exploration_targets.size() <= 3 and visited_tiles.size() > 8:  # Reduced thresholds
+		exit_score += 35.0  # Increased from 25.0
 		reasons.append("few targets remaining")
+	elif exploration_targets.size() <= 1:
+		exit_score += 50.0  # High score for almost no targets
+		reasons.append("nearly fully explored")
 	
-	# Factor 6: Exit availability
-	if not exit_found:
-		exit_score -= 20.0  # Reluctant to leave without knowing exit
+	# Factor 5: Navigation skill affects confidence (rebalanced)
+	if party_navigation < 20:  # Poor navigators get nervous faster
+		exit_score += 20.0
+		if moves_made > 15:
+			exit_score += 20.0
+			reasons.append("poor navigation skills")
+	elif party_navigation > 60:  # Good navigators are more confident
+		exit_score -= 10.0  # Reduced penalty
 	
-	# Factor 7: Random chance based on party temperament
-	var random_factor = rng.randf_range(-10.0, 10.0)
-	exit_score += random_factor
+	# Factor 6: Exit availability bonus
+	if exit_found:
+		exit_score += 10.0  # Bonus for knowing the way out
+	else:
+		exit_score -= 10.0  # Penalty for not knowing exit (reduced from -20)
 	
-	# Decision threshold
-	var exit_threshold = 50.0
+	# Factor 7: Efficiency check - if we're not finding much, leave
+	if moves_made > 15:
+		var tiles_per_move = float(visited_tiles.size()) / float(moves_made)
+		if tiles_per_move < 0.7:  # Not exploring efficiently
+			exit_score += 25.0
+			reasons.append("inefficient exploration")
+	
+	# Decision threshold (lowered to be more aggressive)
+	var exit_threshold = 40.0  # Reduced from 50.0
 	
 	if exit_score >= exit_threshold:
 		decided_to_exit = true
-		var reason_text = " (".join(reasons) + ")" if reasons.size() > 0 else ""
+		var reason_text = " (" + ", ".join(reasons) + ")" if reasons.size() > 0 else ""
 		print("Party decides to exit! Score: %.1f %s" % [exit_score, reason_text])
 		return true
 	
@@ -286,7 +326,14 @@ func _head_to_exit():
 	current_path.clear()
 	exploration_targets.clear()
 	exploration_targets.append(exit_position)
+	
 	print("Party heading to exit at (%d, %d)" % [exit_position.x, exit_position.y])
+	
+	# Try to find path to exit immediately
+	current_path = _find_path_to_target(exit_position)
+	if current_path.is_empty():
+		print("WARNING: Cannot find path to exit! Ending exploration anyway.")
+		_finish_exploration_early("Party attempted to exit but couldn't find path")
 
 func _calculate_navigation_skill(party_data: Array) -> int:
 	var total_navigation = 0
@@ -373,18 +420,22 @@ func _find_next_destination():
 	current_path.clear()
 	print("Finding next destination from (%d, %d)" % [party_position.x, party_position.y])
 	
+	# Remove retreated positions from targets
 	for retreated_pos in retreated_tiles:
 		if retreated_pos in exploration_targets:
 			exploration_targets.erase(retreated_pos)
 	
+	# If we have no targets, try to find some
 	if exploration_targets.is_empty() and not decided_to_exit:
 		_find_unexplored_areas()
 	
+	# If still no targets, try even harder
 	if exploration_targets.is_empty() and not decided_to_exit:
 		_find_any_unvisited_areas()
 	
+	# If STILL no targets, we're probably done
 	if exploration_targets.is_empty():
-		print("No unvisited areas found - exploration complete")
+		print("No targets found - exploration should end")
 		return
 	
 	print("Have %d targets available" % exploration_targets.size())
@@ -400,6 +451,19 @@ func _find_next_destination():
 	if current_path.is_empty():
 		print("Failed to find path to target (%d, %d)" % [best_target.x, best_target.y])
 		exploration_targets.erase(best_target)
+		
+		# If we can't reach our best target, try a few more before giving up
+		var attempts = 0
+		while current_path.is_empty() and exploration_targets.size() > 0 and attempts < 3:
+			best_target = _choose_best_target()
+			if best_target != Vector2i(-1, -1):
+				current_path = _find_path_to_target(best_target)
+				if current_path.is_empty():
+					exploration_targets.erase(best_target)
+			attempts += 1
+		
+		if current_path.is_empty():
+			print("Cannot reach any targets after %d attempts" % attempts)
 	else:
 		print("Found path with %d steps" % current_path.size())
 		exploration_targets.erase(best_target)
@@ -734,20 +798,24 @@ func _process_tile_encounter(tile) -> Dictionary:
 
 func _resolve_combat_encounter(monster_strength: int, tile) -> String:
 	"""Instead of auto-resolving, emit signal for battle system"""
+	# This function now properly defers to the battle system,
+	# but if you had auto-resolution logic, here's a balanced version:
+	
 	pending_battle_tile = tile
 	
 	var encounter_data = {
 		"monster_level": tile.monster_level,
 		"monster_count": tile.monster_count,
 		"monster_strength": monster_strength,
-		"tile_position": tile.position
+		"tile_position": tile.position,
+		"is_boss": tile.tile_type == DungeonTileResource.BOSS
 	}
 	
 	# Pause exploration and emit signal
 	current_state = ExplorationState.PAUSED_FOR_ENCOUNTER
 	monster_encounter.emit(encounter_data)
 	
-	return "combat_encounter"  # Return special event type
+	return "combat_encounter"
 
 # Add this method to handle battle results
 func resolve_monster_encounter(battle_result: Dictionary):
@@ -855,3 +923,25 @@ func get_exploration_summary() -> Dictionary:
 		"exit_found": exit_found,
 		"decided_to_exit": decided_to_exit
 	}
+
+func _emergency_pathfinding():
+	"""Try to find any valid move when normal pathfinding fails"""
+	print("Attempting emergency pathfinding...")
+	
+	# Try to move to any adjacent passable tile
+	var directions = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	var valid_moves = []
+	
+	for direction in directions:
+		var test_pos = party_position + direction
+		if _is_valid_move(test_pos):
+			valid_moves.append(test_pos)
+	
+	if valid_moves.is_empty():
+		print("Emergency pathfinding: No valid moves available")
+		return
+	
+	# Pick a random valid move
+	var emergency_move = valid_moves[rng.randi() % valid_moves.size()]
+	current_path = [emergency_move]
+	print("Emergency pathfinding: Moving to (%d, %d)" % [emergency_move.x, emergency_move.y])

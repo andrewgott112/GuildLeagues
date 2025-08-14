@@ -36,7 +36,8 @@ func reset_for_battle():
 	last_action = ""
 
 func take_damage(amount: int) -> int:
-	var actual_damage = max(1, amount - (defense / 10))  # Basic damage reduction
+	# REBALANCED: Slightly less damage reduction for monsters
+	var actual_damage = max(1, amount - (defense / 18))  # Changed from /15 to /18 (less reduction)
 	current_hp = max(0, current_hp - actual_damage)
 	if current_hp <= 0:
 		is_alive = false
@@ -71,7 +72,7 @@ func choose_action(battle_context: Dictionary) -> String:
 	else:
 		return "defend"
 
-# Generate random monsters for encounters
+# Generate random monsters for encounters - REBALANCED
 static func generate_random_monster(level: int = 1) -> MonsterResource:
 	var monster = MonsterResource.new()
 	
@@ -82,19 +83,18 @@ static func generate_random_monster(level: int = 1) -> MonsterResource:
 	monster.monster_type = types.pick_random()
 	monster.level = level
 	
-	# Scale stats by level with some randomness
-	var base_multiplier = 1.0 + (level - 1) * 0.3
-	var variance = 0.2  # ±20% variance
+	# QUICK FIX: Much weaker monsters
+	var level_bonus = (level - 1) * 5  # Only +5 per level instead of percentage scaling
 	
-	monster.attack = int(_random_stat(45, base_multiplier, variance))
-	monster.defense = int(_random_stat(35, base_multiplier, variance))
-	monster.hp = int(_random_stat(50, base_multiplier, variance))
+	monster.attack = 20 + level_bonus + randi_range(-5, 5)
+	monster.defense = 15 + level_bonus + randi_range(-3, 3)  
+	monster.hp = 25 + level_bonus + randi_range(-5, 5)
 	monster.max_hp = monster.hp
 	monster.current_hp = monster.hp
 	
-	# Battle skills (generally lower than adventurers)
-	monster.observe_skill = int(_random_stat(25, base_multiplier, variance * 0.5))
-	monster.decide_skill = int(_random_stat(20, base_multiplier, variance * 0.5))
+	# Keep skills low
+	monster.observe_skill = 15 + level_bonus
+	monster.decide_skill = 10 + level_bonus
 	
 	# Random AI personality
 	monster.aggression = randf_range(0.4, 0.9)
@@ -106,4 +106,4 @@ static func generate_random_monster(level: int = 1) -> MonsterResource:
 static func _random_stat(base: int, multiplier: float, variance: float) -> float:
 	var scaled = base * multiplier
 	var random_offset = scaled * randf_range(-variance, variance)
-	return max(5.0, scaled + random_offset)  # Minimum 5 for any stat
+	return max(3.0, scaled + random_offset)  # Minimum 3 for any stat (was 5)

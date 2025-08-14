@@ -101,8 +101,8 @@ class Combatant:
 	func take_damage(amount: int) -> int:
 		var actual_damage = amount
 		if adventurer:
-			# Simple damage calculation for adventurers
-			var reduced_damage = max(1, amount - (adventurer.defense / 15))
+			# REBALANCED: Slightly more damage reduction for adventurers 
+			var reduced_damage = max(1, amount - (adventurer.defense / 12))  # Changed from /15 to /12 (more reduction)
 			adventurer.hp = max(0, adventurer.hp - reduced_damage)
 			actual_damage = reduced_damage
 		elif monster:
@@ -308,7 +308,10 @@ func _execute_attack(attacker: Combatant) -> Dictionary:
 		return {"success": false, "message": "No valid targets"}
 	
 	var target = targets[rng.randi() % targets.size()]
-	var base_damage = attacker.get_attack() / 10 + rng.randi_range(1, 6)  # Some randomness
+	
+	# REBALANCED: More reasonable damage calculation
+	var attacker_attack = attacker.get_attack()
+	var base_damage = max(1, attacker_attack / 12 + rng.randi_range(1, 4))  # Reduced from /10 to /12, dice from 1-6 to 1-4
 	
 	# Apply defense bonus if target is defending
 	var final_damage = base_damage

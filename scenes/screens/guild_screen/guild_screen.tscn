@@ -110,6 +110,36 @@ size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 6
 
+[node name="ProgressPanel" type="Panel" parent="Margin/Column"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+
+[node name="ProgressMargin" type="MarginContainer" parent="Margin/Column/ProgressPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="ProgressVBox" type="VBoxContainer" parent="Margin/Column/ProgressPanel/ProgressMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ProgressLabel" type="Label" parent="Margin/Column/ProgressPanel/ProgressMargin/ProgressVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Tournament Progress"
+
+[node name="SeasonStatsLabel" type="Label" parent="Margin/Column/ProgressPanel/ProgressMargin/ProgressVBox"]
+layout_mode = 2
+text = "Season stats will appear here"
+autowrap_mode = 3
+
 [node name="BottomBar" type="HBoxContainer" parent="Margin/Column"]
 custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
@@ -124,6 +154,10 @@ text = "Go To Draft"
 [node name="ToDungeon" type="Button" parent="Margin/Column/BottomBar"]
 layout_mode = 2
 text = "Go To Dungeon"
+
+[node name="ToPlayoffs" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+text = "Playoffs"
 
 [node name="Control" type="Control" parent="Margin/Column/BottomBar"]
 layout_mode = 2

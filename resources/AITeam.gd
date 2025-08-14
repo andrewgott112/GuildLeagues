@@ -2,10 +2,13 @@
 extends Resource
 class_name AITeamResource
 
+# Preload AdventurerResource
+const AdventurerResource = preload("res://resources/Adventurer.gd")
+
 @export var team_name: String = "Team Alpha"
 @export var coach_name: String = "Coach Smith"
 @export var team_id: StringName
-@export var roster: Array[AdventurerResource] = []
+@export var roster: Array = []  # Array[AdventurerResource] - remove typing for now
 
 # Team personality traits (affects AI behavior and narratives)
 @export var aggression: float = 0.5        # 0.0 = defensive, 1.0 = very aggressive
@@ -28,14 +31,14 @@ class_name AITeamResource
 
 # Draft history for AI behavior
 @export var draft_preferences: Dictionary = {}  # role_id -> preference_weight
-@export var last_draft_picks: Array[AdventurerResource] = []
+@export var last_draft_picks: Array = []  # Array[AdventurerResource] - remove typing for now
 
 # Rivalry tracking (team_id -> rivalry_data)
 @export var rivalries: Dictionary = {}
 
 # Team strategy tendencies
 @export var preferred_formation: String = "balanced"  # balanced, offensive, defensive, etc.
-@export var tactical_focus: Array[String] = ["combat", "exploration"]  # what they prioritize
+@export var tactical_focus: Array = ["combat", "exploration"]  # what they prioritize
 
 func _init():
 	if team_id == StringName():
@@ -113,7 +116,7 @@ func get_battle_tactics() -> Dictionary:
 	}
 
 # Draft AI behavior
-func evaluate_prospect(prospect: AdventurerResource, current_needs: Dictionary) -> float:
+func evaluate_prospect(prospect, current_needs: Dictionary) -> float:
 	var base_score = 0.0
 	
 	# Calculate prospect value

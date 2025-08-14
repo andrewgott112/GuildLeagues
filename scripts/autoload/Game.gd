@@ -2,6 +2,10 @@
 extends Node
 ## Central game state & season/phase gating with AI teams and playoffs
 
+# Preload the classes we need
+const AITeamResource = preload("res://resources/AITeam.gd")
+const PlayoffSystem = preload("res://scripts/systems/playoff_system.gd")
+
 # No Main Menu here — phases are just gameplay screens.
 enum Phase { GUILD, DUNGEONS, PLAYOFFS, DRAFT }
 
@@ -25,10 +29,10 @@ var draft_done_for_season: bool = false
 var playoffs_done_for_season: bool = false
 
 # NEW: AI Team and Playoff Management
-var ai_teams: Array[AITeamResource] = []
+var ai_teams: Array = []  # Array of AITeamResource - remove typing for now
 var playoff_system: PlayoffSystem = null
 var league_size: int = 8  # Total teams including player
-var player_team: AITeamResource = null
+var player_team = null  # AITeamResource - remove typing for now
 
 # Season performance tracking
 var season_results: Dictionary = {}  # season -> results_data
@@ -49,12 +53,16 @@ func goto(p: Phase) -> void:
 	emit_signal("phase_changed", p)
 
 func phase_name(p: Phase = phase) -> String:
-	match p:
-		Phase.GUILD:     return "Guild"
-		Phase.DUNGEONS:  return "Dungeons"
-		Phase.PLAYOFFS:  return "Playoffs"
-		Phase.DRAFT:     return "Draft"
-		_:               return "~"
+	if p == Phase.GUILD:
+		return "Guild"
+	elif p == Phase.DUNGEONS:
+		return "Dungeons"
+	elif p == Phase.PLAYOFFS:
+		return "Playoffs"
+	elif p == Phase.DRAFT:
+		return "Draft"
+	else:
+		return "~"
 
 # ───────────────────────────────────────────────────────────────────
 # Draft gating
@@ -98,15 +106,15 @@ func initialize_ai_teams():
 	
 	print("[Game] Generated %d AI teams for the league" % ai_teams.size())
 
-func get_all_teams() -> Array[AITeamResource]:
+func get_all_teams() -> Array:
 	"""Get all teams including player team"""
-	var all_teams: Array[AITeamResource] = []
+	var all_teams: Array = []
 	if player_team:
 		all_teams.append(player_team)
 	all_teams.append_array(ai_teams)
 	return all_teams
 
-func create_player_team() -> AITeamResource:
+func create_player_team():
 	"""Create/update player team from current roster"""
 	if not playoff_system:
 		playoff_system = PlayoffSystem.new()
@@ -175,7 +183,22 @@ func _start_playoffs():
 	print("[Game] Playoffs started with %d teams" % all_teams.size())
 
 func can_start_playoffs() -> bool:
-	return phase == Phase.DUNGEONS and draft_done_for_season
+	# More flexible conditions - playoffs available if:
+	# 1. Draft is done AND
+	# 2. Player has done at least some dungeon exploration OR is in dungeon phase
+	if not draft_done_for_season:
+		return false
+	
+	if roster.is_empty():
+		return false
+	
+	# Allow playoffs if:
+	# - Currently in dungeons phase, OR
+	# - Have completed at least one dungeon run, OR  
+	# - Are in guild phase but have done dungeons this season
+	return (phase == Phase.DUNGEONS or 
+			season_stats.dungeons_completed > 0 or
+			(phase == Phase.GUILD and draft_done_for_season))
 
 ## Call this when Playoffs end; it rolls the season and *reopens* the draft.
 func finish_playoffs_and_roll_season() -> void:
@@ -224,16 +247,19 @@ func _calculate_player_playoff_performance() -> String:
 	else:
 		# Calculate round reached
 		var last_round = 0
-		for match in playoff_system.current_tournament.matches:
-			if (match.team1 == player_team or match.team2 == player_team) and match.status == PlayoffSystem.MatchStatus.COMPLETED:
-				last_round = max(last_round, match.round_number)
+		for match_item in playoff_system.current_tournament.matches:
+			if (match_item.team1 == player_team or match_item.team2 == player_team) and match_item.status == PlayoffSystem.MatchStatus.COMPLETED:
+				last_round = max(last_round, match_item.round_number)
 		
-		match last_round:
-			0: return "First round exit"
-			1: return "First round exit"
-			2: return "Quarterfinals"
-			3: return "Semifinals"
-			_: return "Early exit"
+		# Use if-else instead of match to avoid keyword conflicts
+		if last_round <= 1:
+			return "First round exit"
+		elif last_round == 2:
+			return "Quarterfinals"
+		elif last_round == 3:
+			return "Semifinals"
+		else:
+			return "Early exit"
 
 # ───────────────────────────────────────────────────────────────────
 # Playoff match management
@@ -249,11 +275,11 @@ func is_player_match_available() -> bool:
 	"""Check if player has a match waiting"""
 	return get_next_player_match() != null
 
-func complete_player_match(winner: AITeamResource, battle_details: Dictionary = {}):
+func complete_player_match(winner, battle_details: Dictionary = {}):
 	"""Complete a player match with battle results"""
-	var match = get_next_player_match()
-	if match:
-		playoff_system.complete_match(match, winner, battle_details)
+	var current_match = get_next_player_match()
+	if current_match:
+		playoff_system.complete_match(current_match, winner, battle_details)
 
 # ───────────────────────────────────────────────────────────────────
 # Playoff signal handlers
@@ -382,19 +408,19 @@ func get_league_standings() -> Array:
 
 func season_progress_text() -> String:
 	"""Get descriptive text for current season progress"""
-	match phase:
-		Phase.GUILD:
-			if draft_done_for_season:
-				return "Pre-season (Ready for dungeons)"
-			else:
-				return "Off-season (Draft available)"
-		Phase.DRAFT:
-			return "Draft in progress"
-		Phase.DUNGEONS:
-			return "Regular season (Dungeon runs)"
-		Phase.PLAYOFFS:
-			if is_player_match_available():
-				return "Playoffs (Match ready)"
-			else:
-				return "Playoffs (Waiting for results)"
-	return "Unknown"
+	if phase == Phase.GUILD:
+		if draft_done_for_season:
+			return "Pre-season (Ready for dungeons)"
+		else:
+			return "Off-season (Draft available)"
+	elif phase == Phase.DRAFT:
+		return "Draft in progress"
+	elif phase == Phase.DUNGEONS:
+		return "Regular season (Dungeon runs)"
+	elif phase == Phase.PLAYOFFS:
+		if is_player_match_available():
+			return "Playoffs (Match ready)"
+		else:
+			return "Playoffs (Waiting for results)"
+	else:
+		return "Unknown"

@@ -1,21 +1,22 @@
 # scenes/screens/playoff_screen/PlayoffScreen.gd
 extends Control
 
-@onready var tournament_title: Label = $Margin/Column/TopBar/TournamentTitle
-@onready var round_info: Label = $Margin/Column/TopBar/RoundInfo
-@onready var player_status: Label = $Margin/Column/TopBar/PlayerStatus
+# Safe references - use get_node_or_null for all UI elements
+@onready var tournament_title: Label = get_node_or_null("Margin/Column/TopBar/TournamentTitle")
+@onready var round_info: Label = get_node_or_null("Margin/Column/TopBar/RoundInfo")
+@onready var player_status: Label = get_node_or_null("Margin/Column/TopBar/PlayerStatus")
 
-@onready var bracket_scroll: ScrollContainer = $Margin/Column/BracketPanel/BracketScroll
-@onready var bracket_container: VBoxContainer = $Margin/Column/BracketPanel/BracketScroll/BracketContainer
+@onready var bracket_scroll: ScrollContainer = get_node_or_null("Margin/Column/MainContent/LeftSide/BracketPanel/BracketScroll")
+@onready var bracket_container: VBoxContainer = get_node_or_null("Margin/Column/MainContent/LeftSide/BracketPanel/BracketScroll/BracketContainer")
 
-@onready var match_panel: Panel = $Margin/Column/MatchPanel
-@onready var match_info: Label = $Margin/Column/MatchPanel/MatchVBox/MatchInfo
-@onready var play_match_btn: Button = $Margin/Column/MatchPanel/MatchVBox/MatchButtons/PlayMatchBtn
-@onready var view_opponent_btn: Button = $Margin/Column/MatchPanel/MatchVBox/MatchButtons/ViewOpponentBtn
+@onready var match_panel: Panel = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel")
+@onready var match_info: Label = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchInfo")
+@onready var play_match_btn: Button = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchButtons/PlayMatchBtn")
+@onready var view_opponent_btn: Button = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchButtons/ViewOpponentBtn")
 
-@onready var standings_list: VBoxContainer = $Margin/Column/StandingsPanel/StandingsScroll/StandingsList
-@onready var back_btn: Button = $Margin/Column/BottomBar/BackBtn
-@onready var sim_round_btn: Button = $Margin/Column/BottomBar/SimRoundBtn
+@onready var standings_list: VBoxContainer = get_node_or_null("Margin/Column/MainContent/RightSide/StandingsPanel/StandingsScroll/StandingsList")
+@onready var back_btn: Button = get_node_or_null("Margin/Column/BottomBar/BackBtn")
+@onready var sim_round_btn: Button = get_node_or_null("Margin/Column/BottomBar/SimRoundBtn")
 
 # Battle integration
 var battle_window_scene = preload("res://scenes/ui/BattleWindow.tscn")
@@ -35,11 +36,15 @@ func _ready():
 	update_timer.timeout.connect(_refresh_display)
 	add_child(update_timer)
 	
-	# Connect buttons
-	play_match_btn.pressed.connect(_on_play_match_pressed)
-	view_opponent_btn.pressed.connect(_on_view_opponent_pressed)
-	back_btn.pressed.connect(_on_back_pressed)
-	sim_round_btn.pressed.connect(_on_sim_round_pressed)
+	# Connect buttons - with null checks
+	if play_match_btn:
+		play_match_btn.pressed.connect(_on_play_match_pressed)
+	if view_opponent_btn:
+		view_opponent_btn.pressed.connect(_on_view_opponent_pressed)
+	if back_btn:
+		back_btn.pressed.connect(_on_back_pressed)
+	if sim_round_btn:
+		sim_round_btn.pressed.connect(_on_sim_round_pressed)
 	
 	# Connect game signals
 	if Game.has_signal("playoff_match_available"):
@@ -60,40 +65,51 @@ func _refresh_display():
 func _update_tournament_info():
 	var playoff_system = Game.playoff_system
 	if not playoff_system or not playoff_system.current_tournament:
-		tournament_title.text = "No Tournament Active"
-		round_info.text = ""
-		player_status.text = ""
+		if tournament_title != null:
+			tournament_title.text = "No Tournament Active"
+		if round_info != null:
+			round_info.text = ""
+		if player_status != null:
+			player_status.text = ""
 		return
 	
 	var tournament = playoff_system.current_tournament
-	tournament_title.text = "%s - Season %d" % [playoff_system.league_name, Game.season]
+	if tournament_title != null:
+		tournament_title.text = "%s - Season %d" % [playoff_system.league_name, Game.season]
 	
 	if tournament.is_completed:
 		if tournament.champion:
-			round_info.text = "TOURNAMENT COMPLETE"
-			if tournament.champion == Game.player_team:
-				player_status.text = "🏆 CHAMPION! 🏆"
-			else:
-				player_status.text = "Champion: %s" % tournament.champion.team_name
+			if round_info != null:
+				round_info.text = "TOURNAMENT COMPLETE"
+			if player_status != null:
+				if tournament.champion == Game.player_team:
+					player_status.text = "🏆 CHAMPION! 🏆"
+				else:
+					player_status.text = "Champion: %s" % tournament.champion.team_name
 		else:
-			round_info.text = "Tournament ended"
-			player_status.text = "No champion determined"
+			if round_info != null:
+				round_info.text = "Tournament ended"
+			if player_status != null:
+				player_status.text = "No champion determined"
 	else:
-		round_info.text = "Round %d of %d" % [tournament.current_round, tournament.max_rounds]
+		if round_info != null:
+			round_info.text = "Round %d of %d" % [tournament.current_round, tournament.max_rounds]
 		
 		# Player status
 		current_player_match = Game.get_next_player_match()
-		if current_player_match:
-			var opponent = current_player_match.team1 if current_player_match.team2 == Game.player_team else current_player_match.team2
-			player_status.text = "Next: vs %s" % opponent.team_name
-		else:
-			player_status.text = "Waiting for next round..."
+		if player_status != null:
+			if current_player_match:
+				var opponent = current_player_match.team1 if current_player_match.team2 == Game.player_team else current_player_match.team2
+				player_status.text = "Next: vs %s" % opponent.team_name
+			else:
+				player_status.text = "Waiting for next round..."
 
 func _update_player_match_panel():
 	current_player_match = Game.get_next_player_match()
 	
 	if current_player_match:
-		match_panel.visible = true
+		if match_panel:
+			match_panel.visible = true
 		var opponent = current_player_match.team1 if current_player_match.team2 == Game.player_team else current_player_match.team2
 		
 		var match_text = "Round %d Match\n" % current_player_match.round_number
@@ -113,252 +129,98 @@ func _update_player_match_panel():
 		if tactics.experience_bonus > 0.05:
 			match_text += "\n• Veteran experience"
 		
-		match_info.text = match_text
-		play_match_btn.disabled = false
-		view_opponent_btn.disabled = false
+		if match_info:
+			match_info.text = match_text
+		if play_match_btn:
+			play_match_btn.disabled = false
+		if view_opponent_btn:
+			view_opponent_btn.disabled = false
 	else:
-		match_panel.visible = false
-		play_match_btn.disabled = true
-		view_opponent_btn.disabled = true
+		# NULL CHECK: Only set visible if match_panel exists
+		if match_panel != null:
+			match_panel.visible = false
+		if play_match_btn != null:
+			play_match_btn.disabled = true
+		if view_opponent_btn != null:
+			view_opponent_btn.disabled = true
 
 func _update_bracket_display():
-	# Clear existing bracket
-	for child in bracket_container.get_children():
-		child.queue_free()
+	# Clear existing bracket - NULL CHECK
+	if bracket_container != null:
+		for child in bracket_container.get_children():
+			child.queue_free()
 	
 	var playoff_system = Game.playoff_system
 	if not playoff_system or not playoff_system.current_tournament:
-		var no_tournament_label = Label.new()
-		no_tournament_label.text = "No tournament data available"
-		bracket_container.add_child(no_tournament_label)
+		if bracket_container != null:
+			var no_tournament_label = Label.new()
+			no_tournament_label.text = "No tournament data available"
+			bracket_container.add_child(no_tournament_label)
 		return
 	
-	_build_bracket_visualization(playoff_system.current_tournament)
+	if bracket_container != null:
+		_build_bracket_visualization(playoff_system.current_tournament)
 
 func _build_bracket_visualization(tournament):
 	"""Build a visual representation of the tournament bracket"""
 	
-	# Group matches by round
-	var rounds_data = {}
-	for match in tournament.matches:
-		if not rounds_data.has(match.round_number):
-			rounds_data[match.round_number] = []
-		rounds_data[match.round_number].append(match)
+	# NULL CHECK: Only proceed if bracket_container exists
+	if bracket_container == null:
+		print("Cannot build bracket - bracket_container is null")
+		return
 	
-	# Create round columns
-	var rounds_container = HBoxContainer.new()
-	rounds_container.add_theme_constant_override("separation", 20)
-	bracket_container.add_child(rounds_container)
-	
-	var round_numbers = rounds_data.keys()
-	round_numbers.sort()
-	
-	for round_num in round_numbers:
-		var round_column = _create_round_column(round_num, rounds_data[round_num])
-		rounds_container.add_child(round_column)
-
-func _create_round_column(round_num: int, matches: Array) -> VBoxContainer:
-	var column = VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
-	
-	# Round header
-	var header = Label.new()
-	header.text = _get_round_name(round_num, Game.playoff_system.current_tournament.max_rounds)
-	header.add_theme_font_size_override("font_size", 16)
-	header.add_theme_color_override("font_color", Color.CYAN)
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(header)
-	
-	# Match cards
-	for match in matches:
-		var match_card = _create_match_card(match)
-		column.add_child(match_card)
-	
-	return column
-
-func _create_match_card(match) -> Panel:
-	var card = Panel.new()
-	card.custom_minimum_size = Vector2(200, 80)
-	
-	# Style based on match status
-	var style = StyleBoxFlat.new()
-	match match.status:
-		Game.playoff_system.MatchStatus.COMPLETED:
-			style.bg_color = Color(0.2, 0.4, 0.2, 0.9)  # Green tint
-		Game.playoff_system.MatchStatus.PENDING:
-			if _is_player_match(match):
-				style.bg_color = Color(0.4, 0.4, 0.2, 0.9)  # Yellow tint for player match
-			else:
-				style.bg_color = Color(0.3, 0.3, 0.3, 0.9)  # Gray
-		_:
-			style.bg_color = Color(0.2, 0.2, 0.2, 0.9)
-	
-	style.border_color = Color.WHITE
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
-	card.add_theme_stylebox_override("panel", style)
-	
-	# Card content
-	var vbox = VBoxContainer.new()
-	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	vbox.add_theme_constant_override("separation", 4)
-	card.add_child(vbox)
-	
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 8)
-	margin.add_theme_constant_override("margin_right", 8)
-	margin.add_theme_constant_override("margin_top", 6)
-	margin.add_theme_constant_override("margin_bottom", 6)
-	vbox.add_child(margin)
-	
-	var content = VBoxContainer.new()
-	content.add_theme_constant_override("separation", 2)
-	margin.add_child(content)
-	
-	# Team names with highlighting
-	var team1_label = Label.new()
-	team1_label.text = _get_team_display_name(match.team1)
-	if match.status == Game.playoff_system.MatchStatus.COMPLETED and match.winner == match.team1:
-		team1_label.add_theme_color_override("font_color", Color.GOLD)
-		team1_label.text += " ✓"
-	elif _is_player_team(match.team1):
-		team1_label.add_theme_color_override("font_color", Color.CYAN)
-	content.add_child(team1_label)
-	
-	var vs_label = Label.new()
-	vs_label.text = "vs"
-	vs_label.add_theme_font_size_override("font_size", 10)
-	vs_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(vs_label)
-	
-	var team2_label = Label.new()
-	team2_label.text = _get_team_display_name(match.team2)
-	if match.status == Game.playoff_system.MatchStatus.COMPLETED and match.winner == match.team2:
-		team2_label.add_theme_color_override("font_color", Color.GOLD)
-		team2_label.text += " ✓"
-	elif _is_player_team(match.team2):
-		team2_label.add_theme_color_override("font_color", Color.CYAN)
-	content.add_child(team2_label)
-	
-	# Match status
-	var status_label = Label.new()
-	status_label.add_theme_font_size_override("font_size", 9)
-	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	
-	match match.status:
-		Game.playoff_system.MatchStatus.COMPLETED:
-			status_label.text = "Final"
-			status_label.add_theme_color_override("font_color", Color.LIGHT_GREEN)
-		Game.playoff_system.MatchStatus.PENDING:
-			if _is_player_match(match):
-				status_label.text = "Your Match"
-				status_label.add_theme_color_override("font_color", Color.YELLOW)
-			else:
-				status_label.text = "Pending"
-				status_label.add_theme_color_override("font_color", Color.LIGHT_GRAY)
-	
-	content.add_child(status_label)
-	
-	return card
+	# Simple version - just list matches
+	var match_count = 0
+	for match_item in tournament.matches:
+		var match_label = Label.new()
+		var status_text = ""
+		if match_item.status == Game.playoff_system.MatchStatus.COMPLETED:
+			status_text = " ✓ %s wins" % match_item.winner.team_name
+		elif match_item.status == Game.playoff_system.MatchStatus.PENDING:
+			status_text = " (Pending)"
+		
+		match_label.text = "Round %d: %s vs %s%s" % [
+			match_item.round_number,
+			match_item.team1.team_name,
+			match_item.team2.team_name,
+			status_text
+		]
+		bracket_container.add_child(match_label)
+		match_count += 1
+		
+		if match_count > 10:  # Limit display to prevent overflow
+			break
 
 func _update_standings():
-	# Clear existing standings
-	for child in standings_list.get_children():
-		child.queue_free()
+	# Clear existing standings - NULL CHECK
+	if standings_list != null:
+		for child in standings_list.get_children():
+			child.queue_free()
+	
+	if standings_list == null:
+		return
 	
 	# Header
-	var header = _create_standings_header()
+	var header = Label.new()
+	header.text = "Tournament Standings"
+	header.add_theme_color_override("font_color", Color.CYAN)
 	standings_list.add_child(header)
 	
 	# Get standings data
 	var standings = Game.get_league_standings()
 	
-	for i in range(standings.size()):
+	for i in range(min(standings.size(), 8)):  # Limit to 8 teams
 		var team_data = standings[i]
-		var row = _create_standings_row(i + 1, team_data)
+		var row = Label.new()
+		row.text = "%d. %s (%d-%d)" % [
+			i + 1,
+			team_data.team.team_name if team_data.team == Game.player_team else team_data.team.team_name,
+			team_data.wins,
+			team_data.losses
+		]
+		if team_data.team == Game.player_team:
+			row.add_theme_color_override("font_color", Color.CYAN)
 		standings_list.add_child(row)
-
-func _create_standings_header() -> HBoxContainer:
-	var header = HBoxContainer.new()
-	header.add_theme_constant_override("separation", 8)
-	
-	var rank_label = Label.new()
-	rank_label.text = "Rank"
-	rank_label.custom_minimum_size.x = 50
-	rank_label.add_theme_color_override("font_color", Color.CYAN)
-	header.add_child(rank_label)
-	
-	var team_label = Label.new()
-	team_label.text = "Team"
-	team_label.custom_minimum_size.x = 150
-	team_label.add_theme_color_override("font_color", Color.CYAN)
-	header.add_child(team_label)
-	
-	var record_label = Label.new()
-	record_label.text = "W-L"
-	record_label.custom_minimum_size.x = 60
-	record_label.add_theme_color_override("font_color", Color.CYAN)
-	header.add_child(record_label)
-	
-	var rate_label = Label.new()
-	rate_label.text = "Win%"
-	rate_label.custom_minimum_size.x = 60
-	rate_label.add_theme_color_override("font_color", Color.CYAN)
-	header.add_child(rate_label)
-	
-	return header
-
-func _create_standings_row(rank: int, team_data: Dictionary) -> HBoxContainer:
-	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	
-	var rank_label = Label.new()
-	rank_label.text = str(rank)
-	rank_label.custom_minimum_size.x = 50
-	row.add_child(rank_label)
-	
-	var team_label = Label.new()
-	team_label.text = _get_team_display_name(team_data.team)
-	team_label.custom_minimum_size.x = 150
-	if _is_player_team(team_data.team):
-		team_label.add_theme_color_override("font_color", Color.CYAN)
-	row.add_child(team_label)
-	
-	var record_label = Label.new()
-	record_label.text = "%d-%d" % [team_data.wins, team_data.losses]
-	record_label.custom_minimum_size.x = 60
-	row.add_child(record_label)
-	
-	var rate_label = Label.new()
-	rate_label.text = "%.1f%%" % (team_data.win_rate * 100)
-	rate_label.custom_minimum_size.x = 60
-	row.add_child(rate_label)
-	
-	return row
-
-# Helper functions
-func _get_round_name(round_num: int, max_rounds: int) -> String:
-	if round_num == max_rounds:
-		return "Championship"
-	elif round_num == max_rounds - 1:
-		return "Semifinals"
-	elif round_num == max_rounds - 2:
-		return "Quarterfinals"
-	else:
-		return "Round %d" % round_num
-
-func _get_team_display_name(team: AITeamResource) -> String:
-	if _is_player_team(team):
-		return "Your Guild"
-	return team.team_name
-
-func _is_player_team(team: AITeamResource) -> bool:
-	return team == Game.player_team
-
-func _is_player_match(match) -> bool:
-	return match.team1 == Game.player_team or match.team2 == Game.player_team
 
 # Button handlers
 func _on_play_match_pressed():
@@ -409,7 +271,7 @@ func _on_view_opponent_pressed():
 	var opponent = current_player_match.team1 if current_player_match.team2 == Game.player_team else current_player_match.team2
 	_show_team_details(opponent)
 
-func _show_team_details(team: AITeamResource):
+func _show_team_details(team):
 	# Create a simple popup with team details
 	var popup = AcceptDialog.new()
 	popup.title = "Team Details: %s" % team.team_name

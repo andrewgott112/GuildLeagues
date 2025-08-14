@@ -99,16 +99,24 @@ func _generate_new_dungeon():
 	print("Generated: " + current_dungeon.name)
 
 func _calculate_difficulty() -> int:
-	var base_difficulty = Game.season
+	# QUICK FIX: Start low and scale slowly
+	var base_difficulty = 1
 	
+	# Only add difficulty after several seasons
+	if Game.season > 3:
+		base_difficulty += (Game.season - 3) / 2
+	
+	# Small bonus based on party strength
 	if Game.roster.size() > 0:
-		var avg_power = 0
+		var strong_adventurers = 0
 		for adventurer in Game.roster:
-			avg_power += adventurer.attack + adventurer.defense + adventurer.role_stat
-		avg_power = avg_power / Game.roster.size() / 10
-		base_difficulty += avg_power
+			var avg_stat = (adventurer.attack + adventurer.defense + adventurer.hp) / 3
+			if avg_stat > 120:  # Only count really strong adventurers
+				strong_adventurers += 1
+		base_difficulty += strong_adventurers / 2
 	
-	return clampi(base_difficulty, 1, 10)
+	# Keep it very low for now
+	return clampi(base_difficulty, 1, 3)
 
 func _generate_dungeon_name() -> String:
 	var prefixes = ["Ancient", "Forgotten", "Dark", "Cursed", "Lost", "Hidden", "Sunken", "Frozen"]
