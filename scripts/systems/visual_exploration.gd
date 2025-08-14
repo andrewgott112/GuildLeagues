@@ -289,33 +289,41 @@ func _head_to_exit():
 	print("Party heading to exit at (%d, %d)" % [exit_position.x, exit_position.y])
 
 func _calculate_navigation_skill(party_data: Array) -> int:
-	var navigation_score = 0
+	var total_navigation = 0
+	var navigator_bonus = 0
 	
-	print("=== Simple Navigation Calculation (Exploration) ===")
+	print("=== Navigation Calculation Debug ===")
 	
 	for adventurer in party_data:
 		var is_navigator = false
 		
-		# Check by role ID (most reliable method)
+		# Check by role ID (most reliable)
 		if adventurer.role and adventurer.role.id == &"navigator":
 			is_navigator = true
-		# Fallback: check by role_stat_name
+		# Fallback: check by role_stat_name (with proper StringName handling)
 		elif adventurer.role and adventurer.role.role_stat_name:
 			var role_stat_name_str = str(adventurer.role.role_stat_name).to_lower()
 			if role_stat_name_str in ["navigation", "navigate"]:
 				is_navigator = true
 		
 		if is_navigator:
-			navigation_score += adventurer.role_stat
-			print("Navigator %s contributes: %d" % [adventurer.name, adventurer.role_stat])
+			total_navigation += adventurer.role_stat * 2
+			navigator_bonus += 5
+			print("%s (Navigator): %d * 2 = %d + 5 bonus" % [adventurer.name, adventurer.role_stat, adventurer.role_stat * 2])
 		else:
-			var role_name = adventurer.role.display_name if adventurer.role else "No Role"
-			print("%s (%s): 0 (not a navigator)" % [adventurer.name, role_name])
+			var contribution = max(1, adventurer.role_stat / 2)
+			total_navigation += contribution
+			print("%s (%s): %d / 2 = %d" % [adventurer.name, adventurer.role.display_name if adventurer.role else "No Role", adventurer.role_stat, contribution])
 	
-	print("Final navigation score: %d" % navigation_score)
-	print("===============================================")
+	var party_size_bonus = party_data.size() * 2
+	var final_score = total_navigation + navigator_bonus + party_size_bonus
 	
-	return navigation_score
+	print("Navigator bonus: %d" % navigator_bonus)
+	print("Party size bonus (%d members): %d" % [party_data.size(), party_size_bonus])
+	print("Final navigation score: %d" % final_score)
+	print("=====================================")
+	
+	return final_score
 
 func _calculate_party_strength(party_data: Array) -> int:
 	var total_strength = 0

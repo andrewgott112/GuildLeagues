@@ -1,0 +1,192 @@
+[gd_scene load_steps=3 format=3 uid="uid://7eduj6rk5ywc"]
+
+[ext_resource type="Script" uid="uid://dic3u0d532bx2" path="res://scenes/screens/playoff_screen/PlayoffScreen.gd" id="1_kdu2i"]
+[ext_resource type="Texture2D" uid="uid://b4wuvsf0wihqd" path="res://resources/gradient.tres" id="2_gbf8b"]
+
+[node name="PlayoffScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("1_kdu2i")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_gbf8b")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="Column" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="TopBar" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TournamentTitle" type="Label" parent="Margin/Column/TopBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Guild Leagues Championship"
+
+[node name="Spacer1" type="Control" parent="Margin/Column/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RoundInfo" type="Label" parent="Margin/Column/TopBar"]
+layout_mode = 2
+text = "Round 1 of 3"
+
+[node name="PlayerStatus" type="Label" parent="Margin/Column/TopBar"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+text = "Next: vs Team Alpha"
+horizontal_alignment = 2
+
+[node name="MainContent" type="HSplitContainer" parent="Margin/Column"]
+layout_mode = 2
+split_offset = 600
+
+[node name="LeftSide" type="VBoxContainer" parent="Margin/Column/MainContent"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BracketPanel" type="Panel" parent="Margin/Column/MainContent/LeftSide"]
+layout_mode = 2
+
+[node name="BracketLabel" type="Label" parent="Margin/Column/MainContent/LeftSide/BracketPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+theme_override_font_sizes/font_size = 18
+text = "Tournament Braket"
+
+[node name="BracketScroll" type="ScrollContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="BracketContainer" type="VBoxContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel/BracketScroll"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MatchPanel" type="Panel" parent="Margin/Column/MainContent/LeftSide"]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+
+[node name="MatchVBox" type="VBoxContainer" parent="Margin/Column/MainContent/LeftSide/MatchPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="MatchTitle" type="Label" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Your Next Match"
+
+[node name="MatchInfo" type="Label" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox"]
+layout_mode = 2
+text = "Round 1 Match
+Your Guild vs Team Alpha"
+
+[node name="MatchButtons" type="HBoxContainer" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayMatchBtn" type="Button" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchButtons"]
+layout_mode = 2
+text = "View Opponent"
+
+[node name="RightSide" type="VBoxContainer" parent="Margin/Column/MainContent"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StandingsPanel" type="Panel" parent="Margin/Column/MainContent/RightSide"]
+layout_mode = 2
+
+[node name="StandingsLabel" type="Label" parent="Margin/Column/MainContent/RightSide/StandingsPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+theme_override_font_sizes/font_size = 18
+text = "League Standings"
+
+[node name="StandingsScroll" type="ScrollContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+horizontal_scroll_mode = 0
+
+[node name="StandingsList" type="VBoxContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel/StandingsScroll"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BottomBar" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="BackBtn" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+text = "Back To Guild"
+
+[node name="Spacer2" type="Control" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="SimRoundBtn" type="Button" parent="Margin/Column/BottomBar"]
+layout_mode = 2
+text = "Simulate AI Matches"
+
+[node name="ProgressPanel" type="Panel" parent="Margin/Column"]
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+
+[node name="ProgressMargin" type="MarginContainer" parent="Margin/Column/ProgressPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="ProgressVBox" type="VBoxContainer" parent="Margin/Column/ProgressPanel/ProgressMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ProgressLabel" type="Label" parent="Margin/Column/ProgressPanel/ProgressMargin/ProgressVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Tournament Progress"
+
+[node name="ProgressInfo" type="Label" parent="Margin/Column/ProgressPanel/ProgressMargin/ProgressVBox"]
+layout_mode = 2
+text = "Round 1: 4 matches remaining
+Your match: Ready to play"
+autowrap_mode = 2

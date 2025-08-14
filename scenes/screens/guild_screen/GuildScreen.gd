@@ -1,3 +1,4 @@
+# scenes/screens/guild_screen/GuildScreen.gd
 extends Control
 
 @onready var season_label: Label = $Margin/Column/TopBar/SeasonLabel
@@ -6,24 +7,38 @@ extends Control
 
 @onready var btn_to_draft: Button = $Margin/Column/BottomBar/ToDraft
 @onready var btn_to_dungeons: Button = $Margin/Column/BottomBar/ToDungeon
+@onready var btn_to_playoffs: Button = $Margin/Column/BottomBar/ToPlayoffs  # NEW
 @onready var btn_save: Button     = $Margin/Column/BottomBar/SaveBtn
 @onready var btn_menu: Button     = $Margin/Column/BottomBar/ToMenu
+
+# NEW: Season progress panel
+@onready var progress_panel: Panel = $Margin/Column/ProgressPanel
+@onready var progress_label: Label = $Margin/Column/ProgressPanel/ProgressMargin/ProgressVBox/ProgressLabel
+@onready var season_stats_label: Label = $Margin/Column/ProgressPanel/ProgressMargin/ProgressVBox/SeasonStatsLabel
 
 func _ready() -> void:
 	_wire_buttons()
 	_refresh_header()
 	_refresh_cta()
 	_populate_roster()
+	_update_progress_panel()
 
 	# Refresh when game state changes
 	if Game.has_signal("phase_changed") and not Game.phase_changed.is_connected(_on_phase_or_season_changed):
 		Game.phase_changed.connect(_on_phase_or_season_changed)
 	if Game.has_signal("season_changed") and not Game.season_changed.is_connected(_on_phase_or_season_changed):
 		Game.season_changed.connect(_on_phase_or_season_changed)
+	
+	# NEW: Connect playoff signals
+	if Game.has_signal("playoff_match_available") and not Game.playoff_match_available.is_connected(_on_playoff_match_available):
+		Game.playoff_match_available.connect(_on_playoff_match_available)
+	if Game.has_signal("season_completed") and not Game.season_completed.is_connected(_on_season_completed):
+		Game.season_completed.connect(_on_season_completed)
 
 func _wire_buttons() -> void:
 	btn_to_draft.pressed.connect(_on_to_draft)
 	btn_to_dungeons.pressed.connect(_on_to_dungeons)
+	btn_to_playoffs.pressed.connect(_on_to_playoffs)  # NEW
 	btn_save.pressed.connect(_on_save_pressed)
 	btn_menu.pressed.connect(_on_main_menu)
 
@@ -40,30 +55,62 @@ func _phase_text() -> String:
 	if Game.has_method("phase_name"):
 		return Game.phase_name()
 
-	if Game.phase == Game.Phase.DRAFT:
-		return "Draft"
-	elif Game.phase == Game.Phase.GUILD:
-		return "Guild"
-	elif Game.phase == Game.Phase.DUNGEONS:
-		return "Dungeons"
-	else:
-		return "—"
+	match Game.phase:
+		Game.Phase.DRAFT:     return "Draft"
+		Game.Phase.GUILD:     return "Guild"
+		Game.Phase.DUNGEONS:  return "Dungeons"
+		Game.Phase.PLAYOFFS:  return "Playoffs"
+		_:                    return "—"
 
 func _refresh_cta() -> void:
 	# Draft button logic
 	var draft_unlocked: bool = Game.can_start_draft()
 	btn_to_draft.disabled = not draft_unlocked
-	btn_to_draft.tooltip_text = "Start the Draft" if draft_unlocked else "Complete the Playoffs to unlock the Draft."
+	btn_to_draft.tooltip_text = "Start the Draft" if draft_unlocked else "Complete the season cycle to unlock the Draft."
 	btn_to_draft.modulate = Color(1, 1, 1, 1.0) if draft_unlocked else Color(1, 1, 1, 0.6)
 	
 	# Dungeons button logic
 	var dungeons_unlocked: bool = _can_access_dungeons()
 	btn_to_dungeons.disabled = not dungeons_unlocked
-	btn_to_dungeons.tooltip_text = "Explore Dungeons" if dungeons_unlocked else "Need at least one adventurer to explore dungeons."
+	var dungeon_tooltip = "Explore Dungeons"
+	if Game.phase == Game.Phase.PLAYOFFS:
+		dungeon_tooltip = "Dungeons unavailable during playoffs"
+	elif not dungeons_unlocked:
+		dungeon_tooltip = "Need at least one adventurer and completed draft"
+	btn_to_dungeons.tooltip_text = dungeon_tooltip
 	btn_to_dungeons.modulate = Color(1, 1, 1, 1.0) if dungeons_unlocked else Color(1, 1, 1, 0.6)
+	
+	# NEW: Playoffs button logic
+	var playoffs_available: bool = _can_access_playoffs()
+	btn_to_playoffs.disabled = not playoffs_available
+	var playoff_tooltip = ""
+	
+	if Game.phase == Game.Phase.PLAYOFFS:
+		playoff_tooltip = "View Current Playoffs"
+		btn_to_playoffs.text = "View Playoffs"
+		if Game.is_player_match_available():
+			btn_to_playoffs.text = "⚔️ Playoff Match!"
+			btn_to_playoffs.modulate = Color(1.2, 1.2, 0.8, 1.0)  # Highlight
+	elif Game.can_start_playoffs():
+		playoff_tooltip = "Start Playoffs"
+		btn_to_playoffs.text = "Start Playoffs"
+		btn_to_playoffs.modulate = Color(1, 1, 1, 1.0)
+	else:
+		playoff_tooltip = "Complete dungeon runs to unlock playoffs"
+		btn_to_playoffs.text = "Playoffs Locked"
+		btn_to_playoffs.modulate = Color(1, 1, 1, 0.6)
+	
+	btn_to_playoffs.tooltip_text = playoff_tooltip
 
 func _can_access_dungeons() -> bool:
-	return Game.roster.size() > 0 and Game.phase != Game.Phase.DRAFT
+	return (Game.roster.size() > 0 
+		and Game.phase in [Game.Phase.GUILD, Game.Phase.DUNGEONS] 
+		and Game.draft_done_for_season)
+
+func _can_access_playoffs() -> bool:
+	return (Game.phase == Game.Phase.PLAYOFFS 
+		or Game.can_start_playoffs() 
+		or Game.is_player_match_available())
 
 func _can_start_draft() -> bool:
 	if Game.has_method("can_start_draft"):
@@ -74,9 +121,145 @@ func _can_start_draft() -> bool:
 		playoffs_ok = Game.playoffs_done_for_season
 	return Game.phase == Game.Phase.GUILD and playoffs_ok
 
+# NEW: Progress panel update
+func _update_progress_panel():
+	if not progress_panel:
+		return
+	
+	progress_panel.visible = true
+	
+	# Phase and season progress
+	var progress_text = "Phase: %s\n" % _phase_text()
+	
+	# Add phase-specific information
+	match Game.phase:
+		Game.Phase.GUILD:
+			if Game.draft_done_for_season and not Game.playoffs_done_for_season:
+				progress_text += "Ready for dungeon exploration"
+			elif Game.playoffs_done_for_season:
+				progress_text += "Season complete - Draft available"
+			else:
+				progress_text += "Pre-season preparation"
+		
+		Game.Phase.DRAFT:
+			progress_text += "Building your roster"
+		
+		Game.Phase.DUNGEONS:
+			progress_text += "Explore dungeons to prepare for playoffs"
+			var season_stats = Game.season_stats
+			if season_stats.dungeons_completed > 0:
+				progress_text += "\nRuns completed: %d" % season_stats.dungeons_completed
+		
+		Game.Phase.PLAYOFFS:
+			if Game.is_player_match_available():
+				progress_text += "⚔️ PLAYOFF MATCH READY!"
+			else:
+				progress_text += "Tournament in progress"
+	
+	progress_label.text = progress_text
+	
+	# Season statistics
+	var stats_text = ""
+	var season_stats = Game.season_stats
+	var all_time_stats = Game.get_all_time_stats()
+	
+	if season_stats.dungeons_completed > 0 or season_stats.total_gold_earned > 0:
+		stats_text += "This Season:\n"
+		stats_text += "• Dungeons: %d\n" % season_stats.dungeons_completed
+		stats_text += "• Gold earned: %d\n" % season_stats.total_gold_earned
+		stats_text += "• Monsters defeated: %d\n" % season_stats.monsters_defeated
+		if season_stats.playoff_performance != "":
+			stats_text += "• Playoff result: %s\n" % season_stats.playoff_performance
+	
+	if all_time_stats.seasons_played > 0:
+		stats_text += "\nCareer Record:\n"
+		stats_text += "• Seasons: %d\n" % all_time_stats.seasons_played
+		if all_time_stats.championships > 0:
+			stats_text += "• 🏆 Championships: %d\n" % all_time_stats.championships
+		stats_text += "• Playoff appearances: %d\n" % all_time_stats.playoff_appearances
+		stats_text += "• Total gold: %d" % all_time_stats.total_gold
+	
+	season_stats_label.text = stats_text
+
 func _on_phase_or_season_changed(_arg: Variant = null) -> void:
 	_refresh_header()
 	_refresh_cta()
+	_update_progress_panel()
+
+# NEW: Handle playoff match availability
+func _on_playoff_match_available():
+	print("Playoff match available! Refreshing UI...")
+	_refresh_cta()
+	_update_progress_panel()
+
+# NEW: Handle season completion
+func _on_season_completed(season_result: Dictionary):
+	print("Season completed: ", season_result)
+	
+	# Show season results popup
+	_show_season_results(season_result)
+	
+	# Refresh UI
+	_refresh_header()
+	_refresh_cta()
+	_update_progress_panel()
+
+func _show_season_results(results: Dictionary):
+	"""Show a popup with season results"""
+	var popup = AcceptDialog.new()
+	popup.title = "Season %d Results" % results.get("season", Game.season - 1)
+	popup.size = Vector2i(400, 300)
+	
+	var content = VBoxContainer.new()
+	content.add_theme_constant_override("separation", 12)
+	
+	# Championship result
+	var champion_label = Label.new()
+	if results.get("player_champion", false):
+		champion_label.text = "🏆 CONGRATULATIONS! 🏆\nYou are the CHAMPION!"
+		champion_label.add_theme_color_override("font_color", Color.GOLD)
+		champion_label.add_theme_font_size_override("font_size", 18)
+	else:
+		champion_label.text = "Season Champion: %s" % results.get("champion", "Unknown")
+		champion_label.add_theme_color_override("font_color", Color.CYAN)
+		champion_label.add_theme_font_size_override("font_size", 16)
+	
+	champion_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(champion_label)
+	
+	# Player performance
+	var performance_label = Label.new()
+	performance_label.text = "Your Performance: %s" % results.get("player_performance", "Unknown")
+	performance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(performance_label)
+	
+	# Season stats
+	var stats = results.get("stats", {})
+	if not stats.is_empty():
+		var stats_text = "\nSeason Statistics:\n"
+		stats_text += "• Dungeons completed: %d\n" % stats.get("dungeons_completed", 0)
+		stats_text += "• Gold earned: %d\n" % stats.get("total_gold_earned", 0)
+		stats_text += "• Monsters defeated: %d" % stats.get("monsters_defeated", 0)
+		
+		var stats_label = Label.new()
+		stats_label.text = stats_text
+		stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		content.add_child(stats_label)
+	
+	# Next season info
+	var next_season_label = Label.new()
+	next_season_label.text = "\nSeason %d is now available!\nThe draft is open." % Game.season
+	next_season_label.add_theme_color_override("font_color", Color.LIGHT_GREEN)
+	next_season_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(next_season_label)
+	
+	popup.add_child(content)
+	add_child(popup)
+	popup.popup_centered()
+	
+	# Auto-cleanup
+	popup.confirmed.connect(popup.queue_free)
+	popup.close_requested.connect(popup.queue_free)
 
 # ---------- Roster UI ----------
 
@@ -198,6 +381,18 @@ func _on_to_dungeons() -> void:
 	if _can_access_dungeons():
 		Game.goto(Game.Phase.DUNGEONS)
 		_switch_scene("res://scenes/screens/dungeon_screen/dungeon_screen.tscn")
+
+# NEW: Playoff navigation
+func _on_to_playoffs() -> void:
+	if Game.phase == Game.Phase.PLAYOFFS:
+		# Already in playoffs, just go to playoff screen
+		_switch_scene("res://scenes/screens/playoff_screen/playoff_screen.tscn")
+	elif Game.can_start_playoffs():
+		# Start playoffs
+		Game.finish_regular_season()  # This triggers playoff start
+		_switch_scene("res://scenes/screens/playoff_screen/playoff_screen.tscn")
+	else:
+		print("Cannot access playoffs yet!")
 
 func _on_save_pressed() -> void:
 	print("Save not implemented yet.")
