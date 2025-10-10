@@ -17,7 +17,7 @@ Rather than building all systems to 10% completion, we build one complete flow a
 
 ### Success Metrics
 - Can complete full season without bugs
-- Battles feel fair and readable
+- Battles feel fair and readable 
 - Character attachment develops naturally
 - Decisions feel meaningful
 - Each season feels different

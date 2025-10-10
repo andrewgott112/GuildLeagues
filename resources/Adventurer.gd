@@ -90,23 +90,34 @@ func apply_role_defaults() -> void:
 	hp = _scale_to_200(role.base_hp, 5, 25)
 	role_stat = _scale_to_200(role.base_role_stat, 1, 10)
 	
-	# Add variance to stats (±20 points)
+	# Add variance to base stats (±20 points)
 	attack = clampi(attack + randi_range(-20, 20), 1, 200)
 	defense = clampi(defense + randi_range(-20, 20), 1, 200)
 	hp = clampi(hp + randi_range(-20, 20), 1, 200)
 	role_stat = clampi(role_stat + randi_range(-20, 20), 1, 200)
 	
-	# NEW: Generate additional combat stats with role influence
-	speed = _generate_stat_with_role_hint(role.base_attack, role.base_defense)
-	accuracy = _generate_stat_with_role_hint(role.base_attack, role.base_role_stat)
-	crit_chance = _generate_stat_with_role_hint(role.base_attack, role.base_hp)
+	# NEW: Generate combat stats from role
+	speed = role.generate_speed()
+	accuracy = role.generate_accuracy()
+	crit_chance = role.generate_crit_chance()
+	
+	# Add individual variance (±15 points)
+	speed = clampi(speed + randi_range(-15, 15), 20, 180)
+	accuracy = clampi(accuracy + randi_range(-15, 15), 20, 180)
+	crit_chance = clampi(crit_chance + randi_range(-15, 15), 20, 180)
 	
 	# Random battle skills (independent of role)
 	observe_skill = randi_range(20, 180)
 	decide_skill = randi_range(20, 180)
 	
-	# Initialize hidden attributes
+	# Initialize hidden attributes with role influence
 	_generate_hidden_attributes()
+	
+	# Set personality based on role
+	aggression = role.generate_aggression()
+	caution = role.generate_caution()
+	teamwork = role.generate_teamwork()
+	ambition = role.generate_ambition()
 	
 	# Calculate initial wage based on visible stats
 	wage = _calculate_wage()
@@ -116,38 +127,25 @@ func _scale_to_200(old_value: int, old_min: int, old_max: int) -> int:
 	var normalized = float(old_value - old_min) / float(old_max - old_min)
 	return int(normalized * 179) + 21  # Maps to roughly 21-200 range
 
-func _generate_stat_with_role_hint(primary_stat: int, secondary_stat: int) -> int:
-	"""Generate a stat influenced by role but with variance"""
-	var base = (primary_stat * 15) + (secondary_stat * 10)
-	var variance = randi_range(-30, 30)
-	return clampi(base + variance, 20, 180)
-
 func _generate_hidden_attributes() -> void:
 	"""Generate hidden attributes that affect growth and behavior"""
 	# Potential: How much this character can grow (50-150)
-	# Lower = limited growth, Higher = high ceiling
 	potential = _generate_biased_stat_custom(50, 150, 0.3)
 	
-	# Peak age: When stats reach maximum (3-8 seasons)
-	peak_age = randi_range(3, 8)
+	# Peak age: Use role's range
+	peak_age = role.generate_peak_age() if role else randi_range(3, 8)
 	
-	# Injury prone: Resistance to injuries (50-150)
-	# Lower = more likely to get injured
-	injury_prone = _generate_biased_stat_custom(50, 150, 0.25)
+	# Injury prone: Use role's resistance modifier
+	var injury_base = role.get_injury_resistance_base() if role else 100
+	injury_prone = injury_base + randi_range(-30, 30)
+	injury_prone = clampi(injury_prone, 50, 150)
 	
 	# Mental fortitude: Madness resistance (50-150)
-	# Lower = goes mad easier from dungeons
 	mental_fortitude = _generate_biased_stat_custom(50, 150, 0.25)
 	
 	# Loyalty base: Natural loyalty tendency (20-80)
 	loyalty_base = randi_range(20, 80)
 	loyalty_current = loyalty_base
-	
-	# Personality traits (0.0-1.0)
-	aggression = randf_range(0.2, 0.9)
-	caution = randf_range(0.2, 0.9)
-	teamwork = randf_range(0.3, 0.9)
-	ambition = randf_range(0.2, 0.9)
 
 func _generate_biased_stat_custom(min_val: int, max_val: int, extreme_chance: float) -> int:
 	"""Generate a stat with most values in middle, some extremes"""
@@ -155,16 +153,43 @@ func _generate_biased_stat_custom(min_val: int, max_val: int, extreme_chance: fl
 	var range_size = max_val - min_val
 	
 	if roll < extreme_chance:
-		# Extreme low
 		return randi_range(min_val, min_val + range_size / 4)
 	elif roll > (1.0 - extreme_chance):
-		# Extreme high
 		return randi_range(max_val - range_size / 4, max_val)
 	else:
-		# Middle range
 		var mid_min = min_val + range_size / 4
 		var mid_max = max_val - range_size / 4
 		return randi_range(mid_min, mid_max)
+
+# Helper functions for role info
+func get_role_name() -> String:
+	"""Get the display name of this character's role"""
+	return role.display_name if role else "Unknown"
+
+func get_role_description() -> String:
+	"""Get a description of the role's strengths"""
+	return role.get_role_description() if role else "No role assigned"
+
+func get_role_stat_name() -> String:
+	"""Get the name of this role's special stat"""
+	return str(role.role_stat_name).capitalize() if role else "Role Stat"
+
+func get_character_summary() -> String:
+	"""Get a brief summary of this character's role and strengths"""
+	var summary = "%s - %s\n" % [name, get_role_name()]
+	summary += get_role_description() + "\n"
+	
+	# Highlight strengths
+	var strengths = []
+	if attack > 130: strengths.append("Strong Attacker")
+	if defense > 130: strengths.append("Tough Defender")
+	if speed > 130: strengths.append("Lightning Fast")
+	if crit_chance > 130: strengths.append("Critical Striker")
+	
+	if strengths.size() > 0:
+		summary += "Strengths: " + ", ".join(strengths)
+	
+	return summary
 
 # ═══════════════════════════════════════════════════════════════════
 # STAT GROWTH & LEVELING
