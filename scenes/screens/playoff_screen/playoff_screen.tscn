@@ -64,6 +64,7 @@ horizontal_alignment = 2
 
 [node name="MainContent" type="HSplitContainer" parent="Margin/Column"]
 layout_mode = 2
+size_flags_vertical = 3
 split_offset = 600
 
 [node name="LeftSide" type="VBoxContainer" parent="Margin/Column/MainContent"]
@@ -72,20 +73,35 @@ theme_override_constants/separation = 12
 
 [node name="BracketPanel" type="Panel" parent="Margin/Column/MainContent/LeftSide"]
 layout_mode = 2
+size_flags_vertical = 3
 
-[node name="BracketLabel" type="Label" parent="Margin/Column/MainContent/LeftSide/BracketPanel"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 23.0
+[node name="BracketMargin" type="MarginContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="BracketVBox" type="VBoxContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel/BracketMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BracketLabel" type="Label" parent="Margin/Column/MainContent/LeftSide/BracketPanel/BracketMargin/BracketVBox"]
+layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "Tournament Braket"
+text = "Tournament Bracket"
 
-[node name="BracketScroll" type="ScrollContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="BracketScroll" type="ScrollContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel/BracketMargin/BracketVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
-[node name="BracketContainer" type="VBoxContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel/BracketScroll"]
+[node name="BracketContainer" type="VBoxContainer" parent="Margin/Column/MainContent/LeftSide/BracketPanel/BracketMargin/BracketVBox/BracketScroll"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
@@ -93,30 +109,42 @@ theme_override_constants/separation = 8
 custom_minimum_size = Vector2(0, 200)
 layout_mode = 2
 
-[node name="MatchVBox" type="VBoxContainer" parent="Margin/Column/MainContent/LeftSide/MatchPanel"]
+[node name="MatchMargin" type="MarginContainer" parent="Margin/Column/MainContent/LeftSide/MatchPanel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="MatchVBox" type="VBoxContainer" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin"]
+layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="MatchTitle" type="Label" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox"]
+[node name="MatchTitle" type="Label" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Your Next Match"
 
-[node name="MatchInfo" type="Label" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox"]
+[node name="MatchInfo" type="Label" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox"]
 layout_mode = 2
 text = "Round 1 Match
 Your Guild vs Team Alpha"
+autowrap_mode = 3
 
-[node name="MatchButtons" type="HBoxContainer" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox"]
+[node name="MatchButtons" type="HBoxContainer" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="PlayMatchBtn" type="Button" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchButtons"]
+[node name="PlayMatchBtn" type="Button" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox/MatchButtons"]
+layout_mode = 2
+text = "Play Match"
+
+[node name="ViewOpponentBtn" type="Button" parent="Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox/MatchButtons"]
 layout_mode = 2
 text = "View Opponent"
 
@@ -126,25 +154,40 @@ theme_override_constants/separation = 12
 
 [node name="StandingsPanel" type="Panel" parent="Margin/Column/MainContent/RightSide"]
 layout_mode = 2
+size_flags_vertical = 3
 
-[node name="StandingsLabel" type="Label" parent="Margin/Column/MainContent/RightSide/StandingsPanel"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 23.0
+[node name="StandingsMargin" type="MarginContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
+
+[node name="StandingsVBox" type="VBoxContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel/StandingsMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StandingsLabel" type="Label" parent="Margin/Column/MainContent/RightSide/StandingsPanel/StandingsMargin/StandingsVBox"]
+layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "League Standings"
 
-[node name="StandingsScroll" type="ScrollContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="StandingsScroll" type="ScrollContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel/StandingsMargin/StandingsVBox"]
+layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="StandingsList" type="VBoxContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel/StandingsScroll"]
+[node name="StandingsList" type="VBoxContainer" parent="Margin/Column/MainContent/RightSide/StandingsPanel/StandingsMargin/StandingsVBox/StandingsScroll"]
 layout_mode = 2
 theme_override_constants/separation = 4
 
 [node name="BottomBar" type="HBoxContainer" parent="Margin/Column"]
+custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_constants/separation = 12
 

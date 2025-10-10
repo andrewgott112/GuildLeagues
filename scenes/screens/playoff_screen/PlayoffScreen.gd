@@ -6,15 +6,15 @@ extends Control
 @onready var round_info: Label = get_node_or_null("Margin/Column/TopBar/RoundInfo")
 @onready var player_status: Label = get_node_or_null("Margin/Column/TopBar/PlayerStatus")
 
-@onready var bracket_scroll: ScrollContainer = get_node_or_null("Margin/Column/MainContent/LeftSide/BracketPanel/BracketScroll")
-@onready var bracket_container: VBoxContainer = get_node_or_null("Margin/Column/MainContent/LeftSide/BracketPanel/BracketScroll/BracketContainer")
+@onready var bracket_scroll: ScrollContainer = get_node_or_null("Margin/Column/MainContent/LeftSide/BracketPanel/BracketMargin/BracketVBox/BracketScroll")
+@onready var bracket_container: VBoxContainer = get_node_or_null("Margin/Column/MainContent/LeftSide/BracketPanel/BracketMargin/BracketVBox/BracketScroll/BracketContainer")
 
 @onready var match_panel: Panel = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel")
-@onready var match_info: Label = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchInfo")
-@onready var play_match_btn: Button = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchButtons/PlayMatchBtn")
-@onready var view_opponent_btn: Button = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchVBox/MatchButtons/ViewOpponentBtn")
+@onready var match_info: Label = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox/MatchInfo")
+@onready var play_match_btn: Button = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox/MatchButtons/PlayMatchBtn")
+@onready var view_opponent_btn: Button = get_node_or_null("Margin/Column/MainContent/LeftSide/MatchPanel/MatchMargin/MatchVBox/MatchButtons/ViewOpponentBtn")
 
-@onready var standings_list: VBoxContainer = get_node_or_null("Margin/Column/MainContent/RightSide/StandingsPanel/StandingsScroll/StandingsList")
+@onready var standings_list: VBoxContainer = get_node_or_null("Margin/Column/MainContent/RightSide/StandingsPanel/StandingsMargin/StandingsVBox/StandingsScroll/StandingsList")
 @onready var back_btn: Button = get_node_or_null("Margin/Column/BottomBar/BackBtn")
 @onready var sim_round_btn: Button = get_node_or_null("Margin/Column/BottomBar/SimRoundBtn")
 
@@ -185,6 +185,11 @@ func _build_bracket_visualization(tournament):
 			match_item.team2.team_name,
 			status_text
 		]
+		
+		# Add some visual styling for better readability
+		if match_item.team1 == Game.player_team or match_item.team2 == Game.player_team:
+			match_label.add_theme_color_override("font_color", Color.CYAN)
+		
 		bracket_container.add_child(match_label)
 		match_count += 1
 		
@@ -204,6 +209,7 @@ func _update_standings():
 	var header = Label.new()
 	header.text = "Tournament Standings"
 	header.add_theme_color_override("font_color", Color.CYAN)
+	header.add_theme_font_size_override("font_size", 16)
 	standings_list.add_child(header)
 	
 	# Get standings data
@@ -214,12 +220,16 @@ func _update_standings():
 		var row = Label.new()
 		row.text = "%d. %s (%d-%d)" % [
 			i + 1,
-			team_data.team.team_name if team_data.team == Game.player_team else team_data.team.team_name,
+			team_data.team.team_name,
 			team_data.wins,
 			team_data.losses
 		]
+		
+		# Highlight player team
 		if team_data.team == Game.player_team:
-			row.add_theme_color_override("font_color", Color.CYAN)
+			row.add_theme_color_override("font_color", Color.LIGHT_GREEN)
+			row.add_theme_font_size_override("font_size", 14)
+		
 		standings_list.add_child(row)
 
 # Button handlers

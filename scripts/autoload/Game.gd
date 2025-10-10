@@ -1,12 +1,9 @@
-# scripts/autoload/Game.gd
+# scripts/autoload/Game.gd - Updated to use draft-based AI teams
 extends Node
-## Central game state & season/phase gating with AI teams and playoffs
 
-# Preload the classes we need
 const AITeamResource = preload("res://resources/AITeam.gd")
 const PlayoffSystem = preload("res://scripts/systems/playoff_system.gd")
 
-# No Main Menu here — phases are just gameplay screens.
 enum Phase { GUILD, DUNGEONS, PLAYOFFS, DRAFT }
 
 signal phase_changed(new_phase: Phase)
@@ -19,23 +16,20 @@ var season: int = 1
 var gold: int = 20
 var roster: Array = []
 
-# -------------------------------------------------------------------
-# Draft gate semantics:
-#   Season 1: unlocked (draft_done_for_season = false)
-#   When you ENTER Draft: set draft_done_for_season = true  (locks button)
-#   After Playoffs (season roll): set draft_done_for_season = false (unlocks again)
-# -------------------------------------------------------------------
 var draft_done_for_season: bool = false
 var playoffs_done_for_season: bool = false
 
-# NEW: AI Team and Playoff Management
-var ai_teams: Array = []  # Array of AITeamResource - remove typing for now
+# AI Team and Playoff Management
+var ai_teams: Array = []
 var playoff_system: PlayoffSystem = null
-var league_size: int = 8  # Total teams including player
-var player_team = null  # AITeamResource - remove typing for now
+var league_size: int = 8
+var player_team = null
+
+# NEW: Draft-based team management
+var all_drafted_adventurers: Dictionary = {}  # team_id -> Array of adventurers
 
 # Season performance tracking
-var season_results: Dictionary = {}  # season -> results_data
+var season_results: Dictionary = {}
 var season_stats: Dictionary = {
 	"dungeons_completed": 0,
 	"total_gold_earned": 0,
@@ -53,58 +47,160 @@ func goto(p: Phase) -> void:
 	emit_signal("phase_changed", p)
 
 func phase_name(p: Phase = phase) -> String:
-	if p == Phase.GUILD:
-		return "Guild"
-	elif p == Phase.DUNGEONS:
-		return "Dungeons"
-	elif p == Phase.PLAYOFFS:
-		return "Playoffs"
-	elif p == Phase.DRAFT:
-		return "Draft"
-	else:
-		return "~"
+	match p:
+		Phase.GUILD: return "Guild"
+		Phase.DUNGEONS: return "Dungeons"
+		Phase.PLAYOFFS: return "Playoffs"
+		Phase.DRAFT: return "Draft"
+		_: return "~"
 
 # ───────────────────────────────────────────────────────────────────
 # Draft gating
 # ───────────────────────────────────────────────────────────────────
 func can_start_draft() -> bool:
-	# Draft can only be started from Guild and only if the gate is open
 	return phase == Phase.GUILD and not draft_done_for_season
 
-## Preferred entry point from GuildScreen:
-## Closes the gate *immediately* so when you come back to Guild the button is locked.
 func start_draft_gate() -> bool:
 	if not can_start_draft():
 		return false
-	draft_done_for_season = true        # close gate as soon as we enter Draft
-	playoffs_done_for_season = false    # we're in a new cycle until playoffs finish
+	draft_done_for_season = true
+	playoffs_done_for_season = false
 	goto(Phase.DRAFT)
 	return true
 
-## Back-compat alias (useful if your UI calls this name):
 func start_new_draft_gate() -> bool:
 	return start_draft_gate()
 
-## Called by DraftScreen when "Finish Draft" is pressed.
-## We *also* lock in start_draft_gate(), but keep this for safety/clarity.
 func finish_draft() -> void:
 	draft_done_for_season = true
+	
+	# NEW: After draft, distribute AI picks to AI teams
+	_distribute_ai_draft_picks()
+	
 	goto(Phase.GUILD)
 
 # ───────────────────────────────────────────────────────────────────
-# NEW: AI Team Management
+# NEW: Draft-based AI Team Management
 # ───────────────────────────────────────────────────────────────────
 func initialize_ai_teams():
-	"""Create AI teams for the league"""
+	"""Create AI teams WITHOUT rosters - they'll get them from draft"""
+	print("[Game] Initializing AI teams (without rosters)...")
 	ai_teams.clear()
+	all_drafted_adventurers.clear()
 	
-	# Create AI teams (league_size - 1 since player is one team)
+	# Create AI teams with empty rosters
 	for i in range(league_size - 1):
-		var difficulty_tier = 1 + (i / 3)  # Gradually increase difficulty
+		var difficulty_tier = 1 + (i / 3)
 		var ai_team = AITeamResource.generate_ai_team(i, difficulty_tier)
+		ai_team.roster = []  # Empty - will be filled by draft
 		ai_teams.append(ai_team)
+		
+		# Initialize empty draft results
+		all_drafted_adventurers[ai_team.team_id] = []
+		
+		print("[Game] Created AI team: %s (empty roster)" % ai_team.team_name)
 	
 	print("[Game] Generated %d AI teams for the league" % ai_teams.size())
+
+func simulate_ai_draft_picks():
+	"""Simulate AI teams making draft picks - called by DraftSystem"""
+	print("[Game] Simulating AI draft picks...")
+	
+	# This is a simplified version - in reality, the DraftSystem would handle this
+	# For now, we'll simulate by giving each AI team 3 random adventurers
+	
+	if ai_teams.is_empty():
+		initialize_ai_teams()
+	
+	# Generate a pool of prospects (similar to what DraftScreen does)
+	var prospect_pool = _generate_ai_draft_prospects(20)  # 20 prospects for 7 AI teams
+	
+	# Each AI team picks 3 adventurers
+	for ai_team in ai_teams:
+		var team_picks = []
+		
+		# Pick 3 adventurers for this team
+		for pick in range(3):
+			if prospect_pool.is_empty():
+				break
+				
+			# AI picks based on team preferences
+			var chosen_index = _ai_choose_prospect(ai_team, prospect_pool)
+			var chosen_adventurer = prospect_pool[chosen_index]
+			prospect_pool.remove_at(chosen_index)
+			
+			team_picks.append(chosen_adventurer)
+			print("[Game] %s drafted %s (%s)" % [ai_team.team_name, chosen_adventurer.name, chosen_adventurer.role.display_name])
+		
+		all_drafted_adventurers[ai_team.team_id] = team_picks
+
+func _generate_ai_draft_prospects(count: int) -> Array:
+	"""Generate prospects for AI draft simulation"""
+	var prospects = []
+	
+	# Load roles
+	var role_files = [
+		"res://data/roles/navigator_role.tres",
+		"res://data/roles/healer_role.tres", 
+		"res://data/roles/tank_role.tres",
+		"res://data/roles/damage_role.tres"
+	]
+	
+	var roles = []
+	for role_path in role_files:
+		var role = load(role_path)
+		if role:
+			roles.append(role)
+	
+	if roles.is_empty():
+		print("[Game] Warning: No roles found for prospect generation")
+		return prospects
+	
+	# Generate prospects using the existing method
+	const AdventurerResource = preload("res://resources/Adventurer.gd")
+	for i in range(count):
+		var prospect = AdventurerResource.generate_random_prospect(roles)
+		prospects.append(prospect)
+	
+	return prospects
+
+func _ai_choose_prospect(ai_team: AITeamResource, prospects: Array) -> int:
+	"""AI logic for choosing prospects (simplified)"""
+	var best_index = 0
+	var best_score = -1.0
+	
+	for i in range(prospects.size()):
+		var prospect = prospects[i]
+		var score = prospect.attack + prospect.defense + prospect.hp + prospect.role_stat
+		
+		# Add team personality modifiers
+		if ai_team.aggression > 0.7:
+			score += prospect.attack * 0.3
+		if ai_team.discipline > 0.7:
+			score += prospect.defense * 0.3
+		
+		# Random factor
+		score += randf_range(-10, 10)
+		
+		if score > best_score:
+			best_score = score
+			best_index = i
+	
+	return best_index
+
+func _distribute_ai_draft_picks():
+	"""After draft ends, assign AI picks to their rosters"""
+	print("[Game] Distributing AI draft picks to team rosters...")
+	
+	# If we haven't simulated AI picks yet, do it now
+	if all_drafted_adventurers.is_empty():
+		simulate_ai_draft_picks()
+	
+	# Assign drafted adventurers to AI team rosters
+	for ai_team in ai_teams:
+		if all_drafted_adventurers.has(ai_team.team_id):
+			ai_team.roster = all_drafted_adventurers[ai_team.team_id].duplicate()
+			print("[Game] %s roster: %d adventurers" % [ai_team.team_name, ai_team.roster.size()])
 
 func get_all_teams() -> Array:
 	"""Get all teams including player team"""
@@ -122,6 +218,7 @@ func create_player_team():
 		_connect_playoff_signals()
 	
 	player_team = playoff_system.create_player_team(roster, "Your Guild")
+	print("[Game] Created player team with %d adventurers" % roster.size())
 	return player_team
 
 func _connect_playoff_signals():
@@ -131,16 +228,13 @@ func _connect_playoff_signals():
 		playoff_system.tournament_completed.connect(_on_tournament_completed)
 
 # ───────────────────────────────────────────────────────────────────
-# Season flow with playoffs
+# Season flow - UPDATED
 # ───────────────────────────────────────────────────────────────────
 func start_regular_season() -> bool:
-	# If you want to force the player to draft before dungeons, keep this check.
-	# Remove the draft_done_for_season check if you want to allow skipping.
 	if phase != Phase.GUILD or not draft_done_for_season:
 		return false
 	goto(Phase.DUNGEONS)
 	
-	# Reset season stats
 	season_stats = {
 		"dungeons_completed": 0,
 		"total_gold_earned": 0,
@@ -151,62 +245,103 @@ func start_regular_season() -> bool:
 	return true
 
 func finish_regular_season() -> void:
-	if phase == Phase.DUNGEONS:
-		print("[Game] Regular season complete, starting playoffs...")
-		goto(Phase.PLAYOFFS)
-		_start_playoffs()
+	print("[Game] Finishing regular season and starting playoffs...")
+	goto(Phase.PLAYOFFS)
+	_start_playoffs()
 
 func _start_playoffs():
 	"""Initialize and start the playoff tournament"""
+	print("[Game] Starting playoffs...")
+	
 	if not playoff_system:
 		playoff_system = PlayoffSystem.new()
 		add_child(playoff_system)
 		_connect_playoff_signals()
+		print("[Game] Created new playoff system")
 	
-	# Ensure we have AI teams
+	# Ensure we have AI teams with rosters
 	if ai_teams.is_empty():
+		print("[Game] No AI teams found, initializing...")
 		initialize_ai_teams()
+		simulate_ai_draft_picks()  # Give them rosters
 	
-	# Create/update player team
+	# Ensure AI teams have rosters
+	for ai_team in ai_teams:
+		if ai_team.roster.is_empty():
+			print("[Game] AI team %s has empty roster, simulating draft..." % ai_team.team_name)
+			# Emergency roster generation - in a real game this would be from draft
+			all_drafted_adventurers[ai_team.team_id] = _generate_emergency_roster()
+	
+	_distribute_ai_draft_picks()
+	
+	if roster.is_empty():
+		print("[Game] ERROR: Player has no roster for playoffs!")
+		return
+	
 	create_player_team()
 	
-	# Get all teams for tournament
 	var all_teams = get_all_teams()
+	print("[Game] Tournament will have %d teams:" % all_teams.size())
+	for team in all_teams:
+		print("  - %s (%d adventurers)" % [team.team_name, team.roster.size()])
 	
-	# Create tournament
 	playoff_system.season = season
 	var tournament = playoff_system.create_tournament(all_teams, PlayoffSystem.TournamentFormat.SINGLE_ELIMINATION)
 	
-	# Process AI matches first
-	playoff_system.process_ai_matches()
+	if tournament:
+		print("[Game] Tournament created successfully!")
+		playoff_system.process_ai_matches()
+		
+		var player_match = get_next_player_match()
+		if player_match:
+			print("[Game] Player match available immediately")
+			emit_signal("playoff_match_available")
+		else:
+			print("[Game] No player match yet")
+	else:
+		print("[Game] ERROR: Failed to create tournament!")
+
+func _generate_emergency_roster() -> Array:
+	"""Emergency roster generation if AI teams don't have draft picks"""
+	var emergency_roster = []
 	
-	print("[Game] Playoffs started with %d teams" % all_teams.size())
+	var role_files = [
+		"res://data/roles/navigator_role.tres",
+		"res://data/roles/healer_role.tres", 
+		"res://data/roles/tank_role.tres",
+		"res://data/roles/damage_role.tres"
+	]
+	
+	var roles = []
+	for role_path in role_files:
+		var role = load(role_path)
+		if role:
+			roles.append(role)
+	
+	if not roles.is_empty():
+		const AdventurerResource = preload("res://resources/Adventurer.gd")
+		for i in range(3):
+			var adventurer = AdventurerResource.generate_random_prospect(roles)
+			emergency_roster.append(adventurer)
+	
+	return emergency_roster
 
 func can_start_playoffs() -> bool:
-	# More flexible conditions - playoffs available if:
-	# 1. Draft is done AND
-	# 2. Player has done at least some dungeon exploration OR is in dungeon phase
 	if not draft_done_for_season:
 		return false
-	
 	if roster.is_empty():
 		return false
-	
-	# Allow playoffs if:
-	# - Currently in dungeons phase, OR
-	# - Have completed at least one dungeon run, OR  
-	# - Are in guild phase but have done dungeons this season
-	return (phase == Phase.DUNGEONS or 
-			season_stats.dungeons_completed > 0 or
-			(phase == Phase.GUILD and draft_done_for_season))
+	return true
 
-## Call this when Playoffs end; it rolls the season and *reopens* the draft.
+# ───────────────────────────────────────────────────────────────────
+# Rest of the methods remain the same...
+# ───────────────────────────────────────────────────────────────────
+
 func finish_playoffs_and_roll_season() -> void:
 	if phase != Phase.PLAYOFFS:
 		return
 	playoffs_done_for_season = true
 	
-	# Store season results
 	var season_result = {
 		"season": season,
 		"champion": playoff_system.current_tournament.champion.team_name if playoff_system.current_tournament.champion else "Unknown",
@@ -219,21 +354,21 @@ func finish_playoffs_and_roll_season() -> void:
 	season += 1
 	emit_signal("season_changed", season)
 	
-	# Evolve AI teams for next season
 	for ai_team in ai_teams:
 		ai_team.start_new_season()
 	
-	# Reset player team stats but keep experience
 	if player_team:
 		player_team.start_new_season()
 	
-	# New season reset/unlock:
 	draft_done_for_season = false
 	playoffs_done_for_season = false
+	
+	# Clear draft data for new season
+	all_drafted_adventurers.clear()
+	
 	goto(Phase.GUILD)
 	
 	print("[Game] Season %d completed, starting season %d" % [season - 1, season])
-	
 	emit_signal("season_completed", season_result)
 
 func _calculate_player_playoff_performance() -> String:
@@ -245,13 +380,11 @@ func _calculate_player_playoff_performance() -> String:
 	elif playoff_system.current_tournament.runner_up == player_team:
 		return "Runner-up"
 	else:
-		# Calculate round reached
 		var last_round = 0
 		for match_item in playoff_system.current_tournament.matches:
 			if (match_item.team1 == player_team or match_item.team2 == player_team) and match_item.status == PlayoffSystem.MatchStatus.COMPLETED:
 				last_round = max(last_round, match_item.round_number)
 		
-		# Use if-else instead of match to avoid keyword conflicts
 		if last_round <= 1:
 			return "First round exit"
 		elif last_round == 2:
@@ -261,70 +394,46 @@ func _calculate_player_playoff_performance() -> String:
 		else:
 			return "Early exit"
 
-# ───────────────────────────────────────────────────────────────────
 # Playoff match management
-# ───────────────────────────────────────────────────────────────────
 func get_next_player_match():
-	"""Get the next match the player needs to play"""
 	if phase != Phase.PLAYOFFS or not playoff_system:
 		return null
-	
 	return playoff_system.get_next_player_match()
 
 func is_player_match_available() -> bool:
-	"""Check if player has a match waiting"""
 	return get_next_player_match() != null
 
 func complete_player_match(winner, battle_details: Dictionary = {}):
-	"""Complete a player match with battle results"""
 	var current_match = get_next_player_match()
 	if current_match:
 		playoff_system.complete_match(current_match, winner, battle_details)
 
-# ───────────────────────────────────────────────────────────────────
-# Playoff signal handlers
-# ───────────────────────────────────────────────────────────────────
+# Signal handlers
 func _on_match_completed(match_result: Dictionary):
 	print("[Game] Match completed: %s" % match_result.get("narrative", ""))
-	
-	# Check if player has next match
 	if is_player_match_available():
 		emit_signal("playoff_match_available")
 
 func _on_round_completed(round_results: Array):
 	print("[Game] Round %d completed with %d matches" % [playoff_system.current_tournament.current_round - 1, round_results.size()])
-	
-	# Process AI matches for next round
 	playoff_system.process_ai_matches()
-	
-	# Check if player advances
 	if is_player_match_available():
 		emit_signal("playoff_match_available")
 
 func _on_tournament_completed(final_result: Dictionary):
 	print("[Game] Tournament completed! %s" % final_result.get("narrative", ""))
-	
-	# Update season stats
 	season_stats.playoff_performance = _calculate_player_playoff_performance()
-	
-	# Tournament is done, can finish season
 	finish_playoffs_and_roll_season()
 
-# ───────────────────────────────────────────────────────────────────
-# Statistics and progression
-# ───────────────────────────────────────────────────────────────────
+# Statistics
 func record_dungeon_completion(gold_earned: int, monsters_defeated: int):
-	"""Record dungeon run stats"""
 	season_stats.dungeons_completed += 1
 	season_stats.total_gold_earned += gold_earned
 	season_stats.monsters_defeated += monsters_defeated
 
 func get_season_summary(season_num: int = season) -> Dictionary:
-	"""Get summary of a specific season"""
 	if season_results.has(season_num):
 		return season_results[season_num]
-	
-	# Current season in progress
 	return {
 		"season": season_num,
 		"in_progress": true,
@@ -332,7 +441,6 @@ func get_season_summary(season_num: int = season) -> Dictionary:
 	}
 
 func get_all_time_stats() -> Dictionary:
-	"""Get career statistics across all seasons"""
 	var total_stats = {
 		"seasons_played": season_results.size(),
 		"championships": 0,
@@ -353,31 +461,27 @@ func get_all_time_stats() -> Dictionary:
 		total_stats.total_gold += stats.get("total_gold_earned", 0)
 		total_stats.total_monsters += stats.get("monsters_defeated", 0)
 	
-	# Add current season if in progress
 	total_stats.total_dungeons += season_stats.get("dungeons_completed", 0)
 	total_stats.total_gold += season_stats.get("total_gold_earned", 0)
 	total_stats.total_monsters += season_stats.get("monsters_defeated", 0)
 	
 	return total_stats
 
-# ───────────────────────────────────────────────────────────────────
 # New game
-# ───────────────────────────────────────────────────────────────────
 func start_new_game() -> void:
 	season = 1
 	gold = 20
 	roster.clear()
-	draft_done_for_season = false      # Season 1: unlocked
+	draft_done_for_season = false
 	playoffs_done_for_season = false
 	
-	# Clear AI teams and playoff system
 	ai_teams.clear()
+	all_drafted_adventurers.clear()
 	if playoff_system:
 		playoff_system.queue_free()
 		playoff_system = null
 	player_team = null
 	
-	# Clear season data
 	season_results.clear()
 	season_stats = {
 		"dungeons_completed": 0,
@@ -388,26 +492,20 @@ func start_new_game() -> void:
 	
 	goto(Phase.GUILD)
 	emit_signal("season_changed", season)
-	
 	print("[Game] New game started")
 
-# ───────────────────────────────────────────────────────────────────
-# Convenience methods for UI
-# ───────────────────────────────────────────────────────────────────
+# Convenience methods
 func get_playoff_bracket_data() -> Dictionary:
-	"""Get bracket data for UI display"""
 	if playoff_system:
 		return playoff_system.get_bracket_data()
 	return {}
 
 func get_league_standings() -> Array:
-	"""Get current league standings"""
 	if playoff_system and playoff_system.current_tournament:
 		return playoff_system.get_tournament_standings()
 	return []
 
 func season_progress_text() -> String:
-	"""Get descriptive text for current season progress"""
 	if phase == Phase.GUILD:
 		if draft_done_for_season:
 			return "Pre-season (Ready for dungeons)"
@@ -424,3 +522,13 @@ func season_progress_text() -> String:
 			return "Playoffs (Waiting for results)"
 	else:
 		return "Unknown"
+
+# TESTING ONLY
+func force_start_playoffs() -> bool:
+	print("[Game] FORCE STARTING PLAYOFFS")
+	if roster.is_empty():
+		print("[Game] No roster - cannot start playoffs")
+		return false
+	draft_done_for_season = true
+	finish_regular_season()
+	return true
