@@ -60,7 +60,7 @@ ALPHA COMPLETE: ~24-34 weeks (6-8 months)
 **Estimated Time:** 1-2 weeks  
 
 **Tasks:**
-- [ ] Expand AdventurerResource.gd with new stats (speed, accuracy, crit_chance)
+- [X] Expand AdventurerResource.gd with new stats (speed, accuracy, crit_chance)
 - [ ] Add hidden attributes (potential, peak_age, injury_prone, mental_fort, loyalty_base)
 - [ ] Add personality traits (aggression, caution)
 - [ ] Add status effects (injuries array, madness_level, seasons_played, age)

@@ -40,6 +40,11 @@ const AdventurerResource = preload("res://resources/Adventurer.gd")
 @export var preferred_formation: String = "balanced"  # balanced, offensive, defensive, etc.
 @export var tactical_focus: Array = ["combat", "exploration"]  # what they prioritize
 
+# Contract and salary management
+@export var signed_contracts: Array = []  # References to Contract objects (stored in Game)
+@export var salary_cap: int = 100
+@export var current_salary_commitments: int = 0
+
 func _init():
 	if team_id == StringName():
 		team_id = StringName("team_" + str(randi()))
@@ -253,3 +258,31 @@ static func generate_ai_team(team_index: int, difficulty_tier: int = 1) -> AITea
 		team.tactical_focus = ["combat", "exploration"]
 	
 	return team
+
+# ═══════════════════════════════════════════════════════════════════
+# CONTRACT MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════
+
+func get_total_salary() -> int:
+	"""Calculate total salary commitments from contracts"""
+	# This will be calculated from Game's active_contracts
+	# For now, return cached value
+	return current_salary_commitments
+
+func update_salary_commitments(game_contracts: Array) -> void:
+	"""Update cached salary commitments from Game's contract list"""
+	current_salary_commitments = 0
+	signed_contracts.clear()
+	
+	for contract in game_contracts:
+		if contract.team == self:
+			signed_contracts.append(contract)
+			current_salary_commitments += contract.salary_per_season
+
+func get_salary_space() -> int:
+	"""Calculate remaining salary cap space"""
+	return salary_cap - current_salary_commitments
+
+func can_afford_contract(salary: int) -> bool:
+	"""Check if team can afford a contract"""
+	return get_salary_space() >= salary

@@ -37,6 +37,157 @@ var season_stats: Dictionary = {
 	"playoff_performance": ""
 }
 
+# Contract management
+var active_contracts: Array = []  # Array of Contract objects
+var free_agent_pool: Array = []   # Array of AdventurerResource (no contracts)
+var salary_cap: int = 100          # Player's salary cap
+
+# ═══════════════════════════════════════════════════════════════════
+# CONTRACT SYSTEM
+# ═══════════════════════════════════════════════════════════════════
+
+class Contract:
+	var character  # AdventurerResource reference
+	var seasons_remaining: int
+	var salary_per_season: int
+	var team  # AITeamResource reference (or null for player team)
+	var signed_date: int  # Season number when signed
+	var is_player_contract: bool  # Quick check if this is player's contract
+	
+	func _init(char, team_ref, seasons: int, salary: int, season_signed: int):
+		character = char
+		team = team_ref
+		seasons_remaining = seasons
+		salary_per_season = salary
+		signed_date = season_signed
+		is_player_contract = (team_ref == null)
+	
+	func get_total_value() -> int:
+		return seasons_remaining * salary_per_season
+	
+	func advance_season() -> bool:
+		"""Advance contract by one season. Returns true if expired."""
+		seasons_remaining -= 1
+		return seasons_remaining <= 0
+	
+	func get_info_text() -> String:
+		var team_name = "Your Guild" if is_player_contract else team.team_name
+		return "%s: %d seasons @ %dg/season (Total: %dg)" % [
+			character.name,
+			seasons_remaining,
+			salary_per_season,
+			get_total_value()
+		]
+
+# ═══════════════════════════════════════════════════════════════════
+# CONTRACT MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════
+
+func sign_contract(character, team_ref, seasons: int, salary: int) -> Contract:
+	"""Sign a character to a contract. team_ref is null for player team."""
+	var new_contract = Contract.new(character, team_ref, seasons, salary, season)
+	active_contracts.append(new_contract)
+	
+	# Add to appropriate roster
+	if new_contract.is_player_contract:
+		if character not in roster:
+			roster.append(character)
+		print("[Game] Player signed %s: %d seasons @ %dg/season" % [character.name, seasons, salary])
+	else:
+		if character not in team_ref.roster:
+			team_ref.roster.append(character)
+		print("[Game] %s signed %s: %d seasons @ %dg/season" % [team_ref.team_name, character.name, seasons, salary])
+	
+	# Remove from free agent pool if present
+	if character in free_agent_pool:
+		free_agent_pool.erase(character)
+	
+	return new_contract
+
+func get_player_contracts() -> Array:
+	"""Get all player's active contracts"""
+	var player_contracts = []
+	for contract in active_contracts:
+		if contract.is_player_contract:
+			player_contracts.append(contract)
+	return player_contracts
+
+func get_team_contracts(team) -> Array:
+	"""Get all contracts for a specific team"""
+	var team_contracts = []
+	for contract in active_contracts:
+		if contract.team == team:
+			team_contracts.append(contract)
+	return team_contracts
+
+func get_player_total_salary() -> int:
+	"""Calculate player's current total salary commitments"""
+	var total = 0
+	for contract in get_player_contracts():
+		total += contract.salary_per_season
+	return total
+
+func get_player_salary_space() -> int:
+	"""Calculate player's remaining salary cap space"""
+	return salary_cap - get_player_total_salary()
+
+func can_afford_contract(salary: int) -> bool:
+	"""Check if player can afford a contract within salary cap"""
+	return get_player_salary_space() >= salary
+
+func process_contract_expirations() -> Dictionary:
+	"""Process contract expirations at end of season. Returns expired characters."""
+	print("[Game] Processing contract expirations...")
+	
+	var expired_contracts = []
+	var expired_player_characters = []
+	var expired_ai_characters = []
+	
+	# Advance all contracts and collect expired ones
+	for contract in active_contracts:
+		if contract.advance_season():
+			expired_contracts.append(contract)
+			
+			if contract.is_player_contract:
+				expired_player_characters.append(contract.character)
+			else:
+				expired_ai_characters.append(contract.character)
+	
+	# Remove expired contracts from active list
+	for expired_contract in expired_contracts:
+		active_contracts.erase(expired_contract)
+		
+		# Remove character from team roster
+		if expired_contract.is_player_contract:
+			if expired_contract.character in roster:
+				roster.erase(expired_contract.character)
+		else:
+			if expired_contract.character in expired_contract.team.roster:
+				expired_contract.team.roster.erase(expired_contract.character)
+		
+		# Add to free agent pool
+		if expired_contract.character not in free_agent_pool:
+			free_agent_pool.append(expired_contract.character)
+		
+		print("[Game] Contract expired: %s (was with %s)" % [
+			expired_contract.character.name,
+			"Your Guild" if expired_contract.is_player_contract else expired_contract.team.team_name
+		])
+	
+	return {
+		"player_losses": expired_player_characters,
+		"ai_losses": expired_ai_characters,
+		"total_expired": expired_contracts.size()
+	}
+
+func get_contract_for_character(character) -> Contract:
+	"""Find active contract for a character, if any"""
+	for contract in active_contracts:
+		if contract.character == character:
+			return contract
+	return null
+
+
 # ───────────────────────────────────────────────────────────────────
 # Phase helpers
 # ───────────────────────────────────────────────────────────────────
@@ -333,10 +484,6 @@ func can_start_playoffs() -> bool:
 		return false
 	return true
 
-# ───────────────────────────────────────────────────────────────────
-# Rest of the methods remain the same...
-# ───────────────────────────────────────────────────────────────────
-
 func finish_playoffs_and_roll_season() -> void:
 	if phase != Phase.PLAYOFFS:
 		return
@@ -351,11 +498,23 @@ func finish_playoffs_and_roll_season() -> void:
 	}
 	season_results[season] = season_result
 	
+	# NEW: Process contract expirations BEFORE season increment
+	var expiration_results = process_contract_expirations()
+	season_result["contract_expirations"] = expiration_results
+	
+	# Show expiration notification if player lost anyone
+	if expiration_results.player_losses.size() > 0:
+		print("[Game] Player lost %d characters to free agency!" % expiration_results.player_losses.size())
+		for character in expiration_results.player_losses:
+			print("  - %s is now a free agent" % character.name)
+	
 	season += 1
 	emit_signal("season_changed", season)
 	
 	for ai_team in ai_teams:
 		ai_team.start_new_season()
+		# Update AI team salary commitments
+		ai_team.update_salary_commitments(active_contracts)
 	
 	if player_team:
 		player_team.start_new_season()
@@ -369,6 +528,7 @@ func finish_playoffs_and_roll_season() -> void:
 	goto(Phase.GUILD)
 	
 	print("[Game] Season %d completed, starting season %d" % [season - 1, season])
+	print("[Game] Free agents available: %d" % free_agent_pool.size())
 	emit_signal("season_completed", season_result)
 
 func _calculate_player_playoff_performance() -> String:

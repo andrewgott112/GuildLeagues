@@ -254,14 +254,22 @@ func _on_finish_pressed() -> void:
 		return
 
 	var picked: Array = state.teams[PLAYER_TEAM]["roster"]
-	print("[DraftScreen] finish: committing %d picks to Game.roster" % picked.size())
+	print("[DraftScreen] finish: signing contracts for %d picks" % picked.size())
 
-	# Append only new refs (avoid dupes if player re-enters)
-	for a in picked:
-		if !Game.roster.has(a):
-			Game.roster.append(a)
+	# NEW: Sign contracts for drafted players (default: 3 seasons, wage from character)
+	for adventurer in picked:
+		var seasons = 3  # Default contract length for draft picks
+		var salary = adventurer.wage
+		
+		# Sign the contract (this also adds to Game.roster)
+		Game.sign_contract(adventurer, null, seasons, salary)
+		print("[DraftScreen] Signed %s to %d season contract @ %dg/season" % [
+			adventurer.name, seasons, salary
+		])
 
-	print("[DraftScreen] Game.roster size after commit: %d" % Game.roster.size())
+	print("[DraftScreen] Game.roster size after contracts: %d" % Game.roster.size())
+	print("[DraftScreen] Active contracts: %d" % Game.active_contracts.size())
+	print("[DraftScreen] Player salary: %d/%d" % [Game.get_player_total_salary(), Game.salary_cap])
 
 	Game.goto(Game.Phase.GUILD)
 	get_tree().change_scene_to_file("res://scenes/screens/guild_screen/guild_screen.tscn")

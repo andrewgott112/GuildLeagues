@@ -24,6 +24,7 @@ func _ready() -> void:
 	_refresh_cta()
 	_populate_roster()
 	_update_progress_panel()
+	_update_contract_info()
 
 	# Refresh when game state changes
 	if Game.has_signal("phase_changed") and not Game.phase_changed.is_connected(_on_phase_or_season_changed):
@@ -200,10 +201,33 @@ func _update_progress_panel():
 		
 		season_stats_label.text = stats_text
 
+func _update_contract_info():
+	"""Display contract and salary cap information"""
+	# This will be displayed in the existing progress panel or a new section
+	var player_contracts = Game.get_player_contracts()
+	var total_salary = Game.get_player_total_salary()
+	var salary_space = Game.get_player_salary_space()
+	
+	print("[Guild] Player Contracts: %d" % player_contracts.size())
+	print("[Guild] Total Salary: %d / %d" % [total_salary, Game.salary_cap])
+	print("[Guild] Remaining Space: %d" % salary_space)
+	
+	# Add this info to the progress panel
+	if season_stats_label:
+		var current_text = season_stats_label.text
+		if current_text != "":
+			current_text += "\n"
+		current_text += "\nContracts & Salary:\n"
+		current_text += "• Active contracts: %d\n" % player_contracts.size()
+		current_text += "• Salary commitments: %dg/%dg\n" % [total_salary, Game.salary_cap]
+		current_text += "• Cap space: %dg" % salary_space
+		season_stats_label.text = current_text
+
 func _on_phase_or_season_changed(_arg: Variant = null) -> void:
 	_refresh_header()
 	_refresh_cta()
 	_update_progress_panel()
+	_update_contract_info()
 
 # NEW: Handle playoff match availability
 func _on_playoff_match_available():
