@@ -248,6 +248,9 @@ func _after_pick() -> void:
 	_busy = false
 
 # ── Buttons / AI ─────────────────────────────────────────────────────────────
+# scenes/screens/draft_screen/DraftScreen.gd
+# In _on_draft_screen_finish():
+
 func _on_finish_pressed() -> void:
 	if Draft == null or state == null:
 		push_warning("[DraftScreen] finish: no state")
@@ -256,23 +259,66 @@ func _on_finish_pressed() -> void:
 	var picked: Array = state.teams[PLAYER_TEAM]["roster"]
 	print("[DraftScreen] finish: signing contracts for %d picks" % picked.size())
 
-	# NEW: Sign contracts for drafted players (default: 3 seasons, wage from character)
+	var failed_signings = []
+	
+	# Sign contracts with validation
 	for adventurer in picked:
-		var seasons = 3  # Default contract length for draft picks
+		var seasons = 3
 		var salary = adventurer.wage
 		
-		# Sign the contract (this also adds to Game.roster)
-		Game.sign_contract(adventurer, null, seasons, salary)
-		print("[DraftScreen] Signed %s to %d season contract @ %dg/season" % [
-			adventurer.name, seasons, salary
-		])
-
-	print("[DraftScreen] Game.roster size after contracts: %d" % Game.roster.size())
-	print("[DraftScreen] Active contracts: %d" % Game.active_contracts.size())
-	print("[DraftScreen] Player salary: %d/%d" % [Game.get_player_total_salary(), Game.salary_cap])
-
-	Game.goto(Game.Phase.GUILD)
+		# FIXED: Now validates salary cap
+		var result = Game.sign_contract(adventurer, null, seasons, salary)
+		
+		if result.success:
+			print("[DraftScreen] ✓ Signed %s: %d seasons @ %dg" % [
+				adventurer.name, seasons, salary
+			])
+		else:
+			# Track failure
+			failed_signings.append({
+				"character": adventurer,
+				"error": result.error
+			})
+			push_warning("[DraftScreen] ✗ Failed to sign %s: %s" % [
+				adventurer.name, result.error
+			])
+	
+	# Handle failures
+	if failed_signings.size() > 0:
+		var error_msg = "Failed to sign %d picks due to salary cap:\n\n" % failed_signings.size()
+		for fail in failed_signings:
+			error_msg += "• %s\n  %s\n\n" % [fail.character.name, fail.error]
+		
+		error_msg += "Current cap space: %dg / %dg\n" % [
+			Game.get_player_salary_space(),
+			Game.salary_cap
+		]
+		error_msg += "\nRelease some contracts or choose cheaper players."
+		
+		# Show error dialog
+		_show_error_dialog(error_msg)
+		return  # Don't proceed
+	
+	# Success
+	print("[DraftScreen] All contracts signed successfully!")
+	print("[DraftScreen] Roster: %d, Salary: %d/%d" % [
+		Game.roster.size(),
+		Game.get_player_total_salary(),
+		Game.salary_cap
+	])
+	
+	Game.finish_draft()  # This now handles AI contracts properly
 	get_tree().change_scene_to_file("res://scenes/screens/guild_screen/guild_screen.tscn")
+
+func _show_error_dialog(message: String):
+	# Create simple error dialog
+	var dialog = AcceptDialog.new()
+	dialog.title = "Salary Cap Exceeded"
+	dialog.dialog_text = message
+	dialog.ok_button_text = "Back to Draft"
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(func(): dialog.queue_free())
 
 func _on_ai_timer_timeout() -> void:
 	_log("_on_ai_timer_timeout")
