@@ -413,7 +413,24 @@ func _on_round_completed(round_results: Array):
 
 func _on_tournament_completed(final_result: Dictionary):
 	print("[Game] Tournament completed!")
-	season_lifecycle.set_playoff_performance(_calculate_player_playoff_performance())
+	
+	# Extract champion info
+	var champion = final_result.get("champion")
+	if champion:
+		var champion_name = champion.team_name if champion.has("team_name") else "Unknown"
+		var is_player_champion = (champion == player_team)
+		
+		# Record champion in season lifecycle BEFORE advancing season
+		season_lifecycle.set_champion_info(champion_name, is_player_champion)
+	
+	# Record player's playoff performance
+	var performance = _calculate_player_playoff_performance()
+	season_lifecycle.set_playoff_performance(performance)
+	
+	# Finalize season results with all playoff data
+	season_lifecycle.finalize_season_results()
+	
+	# Now advance to next season
 	finish_playoffs_and_roll_season()
 
 # ═══════════════════════════════════════════════════════════════════

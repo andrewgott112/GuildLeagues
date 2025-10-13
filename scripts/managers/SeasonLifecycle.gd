@@ -25,6 +25,28 @@ var season_results: Dictionary = {}  # season_number -> results dict
 var retired_characters: Array = []
 var deceased_characters: Array = []
 
+func finalize_season_results() -> void:
+	"""
+	Finalize the current season's results with playoff data.
+	Call this AFTER playoffs complete but BEFORE advance_season().
+	"""
+	var current_result = season_results.get(current_season)
+	if current_result:
+		# Ensure playoff performance is captured
+		if current_result.player_performance == "":
+			current_result.player_performance = season_stats.playoff_performance
+		print("[SeasonLifecycle] Season %d results finalized" % current_season)
+
+func set_champion_info(champion_team_name: String, is_player: bool) -> void:
+	"""Set the season champion before finalizing results"""
+	var current_result = season_results.get(current_season)
+	if current_result:
+		current_result.champion = champion_team_name
+		current_result.player_champion = is_player
+		print("[SeasonLifecycle] Champion recorded: %s (Player: %s)" % [champion_team_name, is_player])
+	else:
+		push_warning("[SeasonLifecycle] Attempted to set champion but no season result exists for season %d" % current_season)
+
 func advance_to_phase(new_phase: int) -> void:
 	"""Change current phase"""
 	var old_phase = current_phase
@@ -36,27 +58,46 @@ func advance_season(rosters: Array, contract_manager: ContractManager) -> Dictio
 	"""
 	Advance to next season with full processing.
 	rosters: Array of all character arrays (player + AI teams)
+	contract_manager: ContractManager reference for handling contract terminations
 	Returns: complete season results
+	
+	NOTE: Champion info should already be set via set_champion_info() 
+		  and finalize_season_results() before calling this method!
 	"""
 	print("[SeasonLifecycle] ===== ADVANCING TO SEASON %d =====" % (current_season + 1))
 	
-	# 1. Process character aging/lifecycle
-	var aging_results = _process_character_aging(rosters)
+	# Get the current season result (should already exist with champion data)
+	var season_result = season_results.get(current_season)
+	
+	# 1. Process character aging/lifecycle (NOW with contract termination)
+	var aging_results = _process_character_aging(rosters, contract_manager)
 	
 	# 2. Process contract expirations
 	var contract_results = contract_manager.process_contract_expirations()
 	
-	# 3. Store season results
-	var season_result = {
-		"season": current_season,
-		"champion": "",  # Set by Game from playoff results
-		"player_champion": false,
-		"player_performance": "",
-		"stats": season_stats.duplicate(),
-		"character_lifecycle": aging_results,
-		"contract_expirations": contract_results
-	}
-	season_results[current_season] = season_result
+	# 3. Update season results with final data
+	if season_result:
+		# Merge in the lifecycle and contract data
+		season_result.character_lifecycle = aging_results
+		season_result.contract_expirations = contract_results
+		print("[SeasonLifecycle] Updated existing season %d result" % current_season)
+	else:
+		# Fallback: create new result if somehow it doesn't exist
+		push_warning("[SeasonLifecycle] No pre-existing season result! Creating one now.")
+		season_result = {
+			"season": current_season,
+			"champion": "Unknown",
+			"player_champion": false,
+			"player_performance": season_stats.get("playoff_performance", "Unknown"),
+			"stats": season_stats.duplicate(),
+			"character_lifecycle": aging_results,
+			"contract_expirations": contract_results
+		}
+		season_results[current_season] = season_result
+	
+	# Validate champion was set
+	if season_result.champion == "":
+		push_warning("[SeasonLifecycle] Champion was never set for season %d!" % current_season)
 	
 	# 4. Increment season
 	current_season += 1
@@ -83,6 +124,11 @@ func record_dungeon_completion(gold_earned: int, monsters_defeated: int) -> void
 func set_playoff_performance(performance: String) -> void:
 	"""Set playoff result text"""
 	season_stats.playoff_performance = performance
+	
+	# Also update the stored season result if it exists
+	var current_result = season_results.get(current_season)
+	if current_result:
+		current_result.player_performance = performance
 
 func get_season_summary(season_num: int = -1) -> Dictionary:
 	"""Get results for specific season (or current if -1)"""
@@ -138,7 +184,7 @@ func get_memorial() -> Array:
 
 ## Private - Character Lifecycle
 
-func _process_character_aging(rosters: Array) -> Dictionary:
+func _process_character_aging(rosters: Array, contract_manager: ContractManager) -> Dictionary:
 	"""Age all characters and process retirements/deaths"""
 	var results = {
 		"aged": [],
@@ -148,29 +194,63 @@ func _process_character_aging(rosters: Array) -> Dictionary:
 		"injuries_healed": []
 	}
 	
-	for roster in rosters:
+	# Track characters to remove per roster
+	var removal_map = {}  # roster_index -> [characters_to_remove]
+	
+	for roster_idx in range(rosters.size()):
+		var roster = rosters[roster_idx]
+		removal_map[roster_idx] = []
+		
 		for character in roster:
 			var char_result = _process_single_character(character)
 			
 			results.aged.append(character.name)
 			
+			# Handle retirement
 			if char_result.retired:
 				results.retired.append(character.name)
 				if character not in retired_characters:
 					retired_characters.append(character)
+				removal_map[roster_idx].append(character)
 			
+			# Handle death (overrides retirement)
 			if char_result.died:
 				results.deceased.append(character.name)
 				if character not in deceased_characters:
 					deceased_characters.append(character)
+				# Remove from retired if they were just added
+				if character in retired_characters:
+					retired_characters.erase(character)
+				# Ensure they're marked for removal
+				if character not in removal_map[roster_idx]:
+					removal_map[roster_idx].append(character)
 			
+			# Handle madness (also counts as removal)
 			if char_result.went_mad:
 				results.went_mad.append(character.name)
 				if character not in deceased_characters:
 					deceased_characters.append(character)
+				# Ensure they're marked for removal
+				if character not in removal_map[roster_idx]:
+					removal_map[roster_idx].append(character)
 			
 			if char_result.injuries_healed > 0:
 				results.injuries_healed.append("%s (%d)" % [character.name, char_result.injuries_healed])
+	
+	# Now remove all marked characters and terminate contracts
+	for roster_idx in removal_map.keys():
+		var roster = rosters[roster_idx]
+		var to_remove = removal_map[roster_idx]
+		
+		for character in to_remove:
+			# Remove from roster
+			roster.erase(character)
+			
+			# Terminate contract
+			var contract = contract_manager.get_contract_for_character(character)
+			if contract:
+				contract_manager.terminate_contract(contract)
+				print("[SeasonLifecycle] Terminated contract for %s (retired/deceased)" % character.name)
 	
 	return results
 

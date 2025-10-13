@@ -112,6 +112,7 @@ func get_contract_for_character(character) -> Contract:
 func process_contract_expirations() -> Dictionary:
 	"""
 	Advance all contracts and process expirations.
+	
 	Returns: {
 		"expired_contracts": Array[Contract],
 		"player_losses": Array[Character],
@@ -163,3 +164,14 @@ func _get_team_id(team_ref) -> String:
 	if team_ref == null:
 		return "player"
 	return String(team_ref.team_id)
+
+func terminate_contract(contract: Contract) -> void:
+	"""
+	Immediately terminate a contract (for retirement/death/madness).
+	Does NOT add character to free agent pool.
+	"""
+	if contract in active_contracts:
+		active_contracts.erase(contract)
+		print("[ContractManager] Contract terminated: %s" % contract.character.name)
+	else:
+		push_warning("[ContractManager] Attempted to terminate non-existent contract for %s" % contract.character.name)
