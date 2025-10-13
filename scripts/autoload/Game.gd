@@ -3,6 +3,8 @@ extends Node
 
 const AITeamResource = preload("res://resources/AITeam.gd")
 const PlayoffSystem = preload("res://scripts/systems/playoff_system.gd")
+const RoleResource = preload("res://resources/Role.gd")
+const AdventurerResource = preload("res://resources/Adventurer.gd")
 
 enum Phase { GUILD, DUNGEONS, PLAYOFFS, DRAFT }
 
@@ -41,6 +43,13 @@ var season_stats: Dictionary = {
 var active_contracts: Array = []  # Array of Contract objects
 var free_agent_pool: Array = []   # Array of AdventurerResource (no contracts)
 var salary_cap: int = 100          # Player's salary cap
+
+# Character lifecycle tracking
+var retired_characters: Array = []  # Characters who have retired (for hall of fame)
+var deceased_characters: Array = []  # Characters who died (for memorial)
+
+# Season transition tracking
+var characters_processing: bool = false  # Prevent re-entry during season processing
 
 # ═══════════════════════════════════════════════════════════════════
 # CONTRACT SYSTEM
@@ -191,6 +200,100 @@ func get_contract_for_character(character) -> Contract:
 # ───────────────────────────────────────────────────────────────────
 # Phase helpers
 # ───────────────────────────────────────────────────────────────────
+
+func get_hall_of_fame() -> Array:
+	"""Get all retired characters (sorted by achievements)"""
+	var hof = retired_characters.duplicate()
+	
+	# Sort by total wins
+	hof.sort_custom(func(a, b): 
+		return a.battles_won > b.battles_won
+	)
+	
+	return hof
+
+func get_memorial() -> Array:
+	"""Get all deceased characters"""
+	return deceased_characters.duplicate()
+
+func get_active_character_count() -> int:
+	"""Get total number of characters actively playing"""
+	var count = roster.size()
+	for ai_team in ai_teams:
+		count += ai_team.roster.size()
+	count += free_agent_pool.size()
+	return count
+
+func get_total_character_count() -> int:
+	"""Get total number of characters ever created"""
+	return get_active_character_count() + retired_characters.size() + deceased_characters.size()
+
+func _handle_character_removal(character, results: Dictionary):
+	"""Handle a character being removed from active play"""
+	
+	# Remove any contracts
+	var contract = get_contract_for_character(character)
+	if contract:
+		active_contracts.erase(contract)
+		print("[Game] Removed contract for %s" % character.name)
+	
+	# Add to appropriate tracking array
+	if character.madness_level >= 100:
+		# Went mad - add to special tracking
+		if character not in deceased_characters:  # Don't track twice
+			deceased_characters.append(character)
+			print("[Game] %s went mad and was removed from play" % character.name)
+	elif character.is_retired:
+		# Retired - add to hall of fame tracking
+		if character not in retired_characters:
+			retired_characters.append(character)
+			print("[Game] %s retired and entered the hall of fame" % character.name)
+	else:
+		# Died - memorial tracking
+		if character not in deceased_characters:
+			deceased_characters.append(character)
+			print("[Game] %s was removed from play (deceased)" % character.name)
+
+func _process_character_season_end(character) -> Dictionary:
+	"""Process a single character's end-of-season updates"""
+	var result = {
+		"injuries_healed": 0,
+		"retired": false,
+		"died": false,
+		"went_mad": false
+	}
+	
+	# Age the character
+	character.apply_aging()
+	
+	# Process injury recovery
+	if character.has_method("process_injury_recovery"):
+		var injuries_before = character.injuries.size()
+		character.process_injury_recovery()
+		var injuries_after = character.injuries.size()
+		result.injuries_healed = injuries_before - injuries_after
+	
+	# Check for retirement (age-based)
+	if character.age > character.peak_age + 5:
+		# Higher chance of retirement past prime
+		var retirement_chance = (character.age - character.peak_age - 5) * 0.15
+		if randf() < retirement_chance:
+			character.is_retired = true
+			result.retired = true
+			print("[Game] %s has retired at age %d" % [character.name, character.age])
+	
+	# Check if already dead or mad
+	if character.madness_level >= 100:
+		result.went_mad = true
+	
+	# Very small chance of death from natural causes if very old
+	if character.age > character.peak_age + 8:
+		if randf() < 0.02:  # 2% chance per season when very old
+			result.died = true
+			print("[Game] %s has passed away from old age" % character.name)
+	
+	return result
+
 func goto(p: Phase) -> void:
 	var old_phase = phase
 	phase = p
@@ -289,7 +392,7 @@ func _generate_ai_draft_prospects(count: int) -> Array:
 	"""Generate prospects for AI draft simulation"""
 	var prospects = []
 	
-	# Load roles
+	# Load roles with proper typing
 	var role_files = [
 		"res://data/roles/navigator_role.tres",
 		"res://data/roles/healer_role.tres", 
@@ -297,9 +400,10 @@ func _generate_ai_draft_prospects(count: int) -> Array:
 		"res://data/roles/damage_role.tres"
 	]
 	
-	var roles = []
+	# Create properly typed array
+	var roles: Array[RoleResource] = []
 	for role_path in role_files:
-		var role = load(role_path)
+		var role = load(role_path) as RoleResource
 		if role:
 			roles.append(role)
 	
@@ -307,8 +411,7 @@ func _generate_ai_draft_prospects(count: int) -> Array:
 		print("[Game] Warning: No roles found for prospect generation")
 		return prospects
 	
-	# Generate prospects using the existing method
-	const AdventurerResource = preload("res://resources/Adventurer.gd")
+	# Generate prospects using the properly typed array
 	for i in range(count):
 		var prospect = AdventurerResource.generate_random_prospect(roles)
 		prospects.append(prospect)
@@ -463,14 +566,14 @@ func _generate_emergency_roster() -> Array:
 		"res://data/roles/damage_role.tres"
 	]
 	
-	var roles = []
+	# Create properly typed array
+	var roles: Array[RoleResource] = []
 	for role_path in role_files:
-		var role = load(role_path)
+		var role = load(role_path) as RoleResource
 		if role:
 			roles.append(role)
 	
 	if not roles.is_empty():
-		const AdventurerResource = preload("res://resources/Adventurer.gd")
 		for i in range(3):
 			var adventurer = AdventurerResource.generate_random_prospect(roles)
 			emergency_roster.append(adventurer)
@@ -498,27 +601,39 @@ func finish_playoffs_and_roll_season() -> void:
 	}
 	season_results[season] = season_result
 	
-	# NEW: Process contract expirations BEFORE season increment
+	# NEW: Process character aging and status effects FIRST
+	var aging_results = process_all_character_aging()
+	season_result["character_lifecycle"] = aging_results
+	
+	# THEN process contract expirations
 	var expiration_results = process_contract_expirations()
 	season_result["contract_expirations"] = expiration_results
 	
-	# Show expiration notification if player lost anyone
+	# Show important notifications
 	if expiration_results.player_losses.size() > 0:
 		print("[Game] Player lost %d characters to free agency!" % expiration_results.player_losses.size())
 		for character in expiration_results.player_losses:
 			print("  - %s is now a free agent" % character.name)
 	
+	if aging_results.retirements.size() > 0:
+		print("[Game] %d characters retired this season" % aging_results.retirements.size())
+	
+	if aging_results.deaths.size() > 0:
+		print("[Game] %d characters died this season" % aging_results.deaths.size())
+	
+	# Increment season
 	season += 1
 	emit_signal("season_changed", season)
 	
+	# Start new season for all teams
 	for ai_team in ai_teams:
 		ai_team.start_new_season()
-		# Update AI team salary commitments
 		ai_team.update_salary_commitments(active_contracts)
 	
 	if player_team:
 		player_team.start_new_season()
 	
+	# Reset season flags
 	draft_done_for_season = false
 	playoffs_done_for_season = false
 	
@@ -528,8 +643,93 @@ func finish_playoffs_and_roll_season() -> void:
 	goto(Phase.GUILD)
 	
 	print("[Game] Season %d completed, starting season %d" % [season - 1, season])
+	print("[Game] Player roster: %d characters" % roster.size())
 	print("[Game] Free agents available: %d" % free_agent_pool.size())
+	print("[Game] Retired characters: %d" % retired_characters.size())
+	
 	emit_signal("season_completed", season_result)
+
+func process_all_character_aging() -> Dictionary:
+	"""Process aging, injuries, and status effects for ALL characters at season end"""
+	print("[Game] Processing character aging and status effects...")
+	
+	if characters_processing:
+		print("[Game] Already processing characters, skipping...")
+		return {}
+	
+	characters_processing = true
+	
+	var results = {
+		"aged_characters": 0,
+		"injuries_healed": 0,
+		"retirements": [],
+		"deaths": [],
+		"madness": []
+	}
+	
+	# Process player roster
+	var player_removals = []
+	for character in roster:
+		var character_result = _process_character_season_end(character)
+		results.aged_characters += 1
+		results.injuries_healed += character_result.injuries_healed
+		
+		if character_result.retired:
+			results.retirements.append(character.name)
+			player_removals.append(character)
+		elif character_result.died:
+			results.deaths.append(character.name)
+			player_removals.append(character)
+		elif character_result.went_mad:
+			results.madness.append(character.name)
+			player_removals.append(character)
+	
+	# Remove retired/dead/mad characters from player roster
+	for character in player_removals:
+		roster.erase(character)
+		_handle_character_removal(character, results)
+	
+	# Process AI team rosters
+	for ai_team in ai_teams:
+		var ai_removals = []
+		for character in ai_team.roster:
+			var character_result = _process_character_season_end(character)
+			results.aged_characters += 1
+			results.injuries_healed += character_result.injuries_healed
+			
+			if character_result.retired or character_result.died or character_result.went_mad:
+				ai_removals.append(character)
+		
+		# Remove from AI roster
+		for character in ai_removals:
+			ai_team.roster.erase(character)
+			_handle_character_removal(character, results)
+	
+	# Process free agents
+	var fa_removals = []
+	for character in free_agent_pool:
+		var character_result = _process_character_season_end(character)
+		results.aged_characters += 1
+		results.injuries_healed += character_result.injuries_healed
+		
+		if character_result.retired or character_result.died or character_result.went_mad:
+			fa_removals.append(character)
+	
+	# Remove from free agents
+	for character in fa_removals:
+		free_agent_pool.erase(character)
+		_handle_character_removal(character, results)
+	
+	characters_processing = false
+	
+	print("[Game] Character processing complete:")
+	print("  - Aged: %d characters" % results.aged_characters)
+	print("  - Healed: %d injuries" % results.injuries_healed)
+	print("  - Retired: %d (%s)" % [results.retirements.size(), ", ".join(results.retirements)])
+	print("  - Died: %d (%s)" % [results.deaths.size(), ", ".join(results.deaths)])
+	print("  - Went Mad: %d (%s)" % [results.madness.size(), ", ".join(results.madness)])
+	
+	return results
 
 func _calculate_player_playoff_performance() -> String:
 	if not playoff_system or not playoff_system.current_tournament:
@@ -649,6 +849,12 @@ func start_new_game() -> void:
 		"monsters_defeated": 0,
 		"playoff_performance": ""
 	}
+	
+	retired_characters.clear()
+	deceased_characters.clear()
+	free_agent_pool.clear()
+	active_contracts.clear()
+	characters_processing = false
 	
 	goto(Phase.GUILD)
 	emit_signal("season_changed", season)

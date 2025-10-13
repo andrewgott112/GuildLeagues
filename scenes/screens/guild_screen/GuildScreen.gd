@@ -1,5 +1,6 @@
 # scenes/screens/guild_screen/GuildScreen.gd
 extends Control
+const DevOverlay = preload("res://scenes/ui/DevOverlay.gd")
 
 @onready var season_label: Label = $Margin/Column/TopBar/SeasonLabel
 @onready var lbl_gold: Label    = $Margin/Column/TopBar/GoldBox/GoldValue
@@ -37,6 +38,11 @@ func _ready() -> void:
 		Game.playoff_match_available.connect(_on_playoff_match_available)
 	if Game.has_signal("season_completed") and not Game.season_completed.is_connected(_on_season_completed):
 		Game.season_completed.connect(_on_season_completed)
+	
+	if DevTools.dev_mode_enabled:
+		var overlay = DevOverlay.new()
+		add_child(overlay)
+		overlay.show_overlay()
 
 func _wire_buttons() -> void:
 	btn_to_draft.pressed.connect(_on_to_draft)
