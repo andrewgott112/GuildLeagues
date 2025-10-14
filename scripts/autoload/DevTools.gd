@@ -657,3 +657,77 @@ func test_free_agency():
 	
 	print("[DevTools] Advance season to see free agency")
 	print("[DevTools] ✅ Free agency test setup complete")
+
+# ═══════════════════════════════════════════════════════════════════
+# SCOUTING SYSTEM TESTS
+# ═══════════════════════════════════════════════════════════════════
+
+func test_scouting():
+	"""Test the scouting system"""
+	print("[DevTools] Testing scouting system...")
+	
+	# Create test character
+	var role_files = [
+		"res://data/roles/damage_role.tres"
+	]
+	var roles: Array[RoleResource] = []
+	for role_path in role_files:
+		var role = load(role_path) as RoleResource
+		if role:
+			roles.append(role)
+	
+	if roles.is_empty():
+		print("[DevTools] No roles found!")
+		return
+	
+	const AdventurerResource = preload("res://resources/Adventurer.gd")
+	var character = AdventurerResource.generate_random_prospect(roles)
+	
+	print("Character: %s" % character.name)
+	print("True Attack: %d" % character.attack)
+	
+	# Apply scouting level 0 (no info)
+	Game.apply_initial_scouting(character, 0)
+	print("Level 0 scout: %s" % Game.get_stat_display(character.name, "attack"))
+	
+	# Apply scouting level 2
+	Game.apply_initial_scouting(character, 2)
+	print("Level 2 scout: %s" % Game.get_stat_display(character.name, "attack"))
+	
+	# Simulate combat
+	for i in 5:
+		var battle_data = {
+			"damage_dealt": 50.0,
+			"was_crit": false
+		}
+		Game.reveal_combat_stats(character.name, battle_data)
+		print("After combat %d: %s" % [i + 1, Game.get_stat_display(character.name, "attack")])
+	
+	print("[DevTools] Scouting test complete!")
+
+func print_scouting_info(character_name: String):
+	"""Print detailed scouting info for a character"""
+	if not Game.get_character_by_name(character_name):
+		print("[DevTools] Character not found: %s" % character_name)
+		return
+	
+	var info = Game.get_scouting_info(character_name)
+	print("=== Scouting Info: %s ===" % character_name)
+	print("Overall confidence: %.1f%%" % (info.get_overall_confidence() * 100))
+	print("Combat experiences: %d" % info.combat_experiences)
+	
+	print("\nStats:")
+	for stat_name in ["attack", "defense", "hp", "speed", "potential"]:
+		var stat = info.stats_known[stat_name]
+		print("  %s: %s (%.1f%% confidence)" % [
+			stat_name,
+			stat.get_display_value(),
+			stat.confidence * 100
+		])
+
+func reveal_all_stats_for_roster():
+	"""Fully reveal all stats for current roster"""
+	for character in Game.roster:
+		for i in 20:
+			Game.reveal_combat_stats(character.name, {"damage_dealt": 50.0})
+	print("[DevTools] Revealed all stats for %d characters" % Game.roster.size())

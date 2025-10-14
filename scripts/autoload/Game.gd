@@ -27,6 +27,7 @@ var draft_coordinator: DraftCoordinator
 var gold: int = 20
 var roster: Array = []
 var player_team = null
+var scouting_database: Dictionary = {}
 
 # Season flow gates
 var draft_done_for_season: bool = false
@@ -363,6 +364,7 @@ func start_new_game() -> void:
 	# Reset managers
 	contract_manager.active_contracts.clear()
 	contract_manager.free_agent_pool.clear()
+	scouting_database.clear()
 	
 	season_lifecycle.current_season = 1
 	season_lifecycle.current_phase = Phase.GUILD
@@ -454,3 +456,118 @@ func phase_name(p: Phase = phase) -> String:
 		Phase.PLAYOFFS: return "Playoffs"
 		Phase.DRAFT: return "Draft"
 		_: return "Unknown"
+
+func get_scouting_info(character_name: String) -> ScoutingInfo:
+	"""Get or create scouting info for a character"""
+	if not scouting_database.has(character_name):
+		scouting_database[character_name] = ScoutingInfo.new(character_name)
+	return scouting_database[character_name]
+
+func get_character_by_name(character_name: String) -> AdventurerResource:
+	"""Find a character by name acr oss all rosters"""
+	# Check player roster
+	for character in roster:
+		if character.name == character_name:
+			return character
+	
+	# Check AI rosters
+	for team in ai_teams:
+		for character in team.roster:
+			if character.name == character_name:
+				return character
+	
+	# Check free agents
+	for character in contract_manager.free_agent_pool:
+		if character.name == character_name:
+			return character
+	
+	return null
+
+func reveal_combat_stats(character_name: String, battle_data: Dictionary):
+	"""Reveal stats based on combat performance"""
+	var character = get_character_by_name(character_name)
+	if not character:
+		return
+	
+	var info = get_scouting_info(character_name)
+	
+	# General combat revelation
+	info.reveal_from_combat(character)
+	
+	# Specific revelations based on battle data
+	if battle_data.has("damage_taken") and battle_data.damage_taken > 0:
+		info.reveal_from_damage_taken(battle_data.damage_taken, character)
+	
+	if battle_data.has("damage_dealt") and battle_data.damage_dealt > 0:
+		var was_crit = battle_data.get("was_crit", false)
+		info.reveal_from_damage_dealt(battle_data.damage_dealt, was_crit, character)
+	
+	if battle_data.has("survived_low_hp") and battle_data.survived_low_hp:
+		info.reveal_from_near_death_survival(character)
+	
+	if battle_data.has("made_decisions") and battle_data.made_decisions:
+		info.reveal_from_decision_making(character)
+	
+	if battle_data.has("made_observations") and battle_data.made_observations:
+		info.reveal_from_observation(character)
+
+func reveal_training_stats(character_name: String, stat_gain: float):
+	"""Reveal stats based on training results"""
+	var character = get_character_by_name(character_name)
+	if not character:
+		return
+	
+	var info = get_scouting_info(character_name)
+	info.reveal_from_training_session(stat_gain, character)
+
+func reveal_injury_stats(character_name: String, got_injured: bool):
+	"""Reveal injury proneness based on injury events"""
+	var character = get_character_by_name(character_name)
+	if not character:
+		return
+	
+	var info = get_scouting_info(character_name)
+	
+	if got_injured:
+		info.reveal_from_injury(character)
+	else:
+		info.reveal_from_avoiding_injury(character)
+
+func apply_initial_scouting(character: AdventurerResource, scout_level: int = 0):
+	"""Apply initial scouting to a character (use in draft)"""
+	var info = get_scouting_info(character.name)
+	info.apply_scout_level(scout_level, character)
+
+func apply_scouting_with_scout(scout: AdventurerResource, prospect: AdventurerResource):
+	"""Apply scouting using a scout character's stats"""
+	var info = get_scouting_info(prospect.name)
+	info.apply_scout_with_stats(scout, prospect)
+
+func process_knowledge_decay():
+	"""Process knowledge decay for all characters at season end"""
+	var current_season = season
+	
+	for char_name in scouting_database.keys():
+		var info = scouting_database[char_name]
+		var seasons_absent = current_season - info.last_observed_season
+		
+		if seasons_absent > 0:
+			info.apply_knowledge_decay(seasons_absent)
+
+func get_stat_display(character_name: String, stat_name: String) -> String:
+	"""Get display string for a character's stat"""
+	if scouting_database.has(character_name):
+		return scouting_database[character_name].get_stat_display(stat_name)
+	return "???"
+
+func is_stat_known(character_name: String, stat_name: String, threshold: float = 0.5) -> bool:
+	"""Check if a stat is known for a character"""
+	if scouting_database.has(character_name):
+		return scouting_database[character_name].is_stat_known(stat_name, threshold)
+	return false
+
+func get_overall_knowledge(character_name: String) -> float:
+	"""Get overall knowledge percentage for a character"""
+	if scouting_database.has(character_name):
+		return scouting_database[character_name].get_overall_confidence()
+	return 0.0

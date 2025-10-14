@@ -290,6 +290,7 @@ func _on_battle_finished(result: Dictionary):
 	
 	# Final update of all cards
 	_update_all_cards()
+	_reveal_combat_stats_for_battle()
 	
 	if close_btn:
 		close_btn.text = "Continue"
@@ -420,3 +421,31 @@ func show_battle():
 	"""Show the battle window"""
 	popup_centered()
 	print("Battle window shown")
+
+func _reveal_combat_stats_for_battle():
+	"""Reveal stats based on battle participation"""
+	if not battle_system:
+		return
+	
+	# Get all combatants
+	var all_combatants = battle_system.get_combatants()
+	
+	for combatant in all_combatants:
+		# Build battle data for this combatant
+		var battle_data = {
+			"damage_dealt": 0.0,  # We don't track this yet, so use placeholder
+			"damage_taken": 0.0,  # We don't track this yet, so use placeholder
+			"was_crit": false,
+			"survived_low_hp": false,  # You can enhance this later
+		}
+		
+		# Reveal stats
+		Game.reveal_combat_stats(combatant.name, battle_data)
+		
+		# Check for injuries
+		var got_injured = false
+		if combatant.character and combatant.character.injuries.size() > 0:
+			got_injured = true
+		Game.reveal_injury_stats(combatant.name, got_injured)
+	
+	print("[BattleWindow] Revealed combat stats for %d participants" % all_combatants.size())

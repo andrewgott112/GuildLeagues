@@ -78,6 +78,11 @@ func _ready() -> void:
 	var prospects: Array = _generate_prospects(6) # pool size
 	_log("generated prospects: %d" % prospects.size())
 	state = Draft.create_draft_state(prospects, TEAM_NAMES, 3, false)
+	
+	var scout_level = 0  # TODO: Calculate based on player's scout staff
+	for prospect in prospects:
+		Game.apply_initial_scouting(prospect, scout_level)
+	_log("Applied level %d scouting to %d prospects" % [scout_level, prospects.size()])
 	_log_state("after create_draft_state")
 
 	finish_btn.disabled = true
