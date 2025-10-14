@@ -122,6 +122,9 @@ func _setup_single_elimination():
 	var shuffled_teams = current_tournament.teams.duplicate()
 	shuffled_teams.shuffle()
 	
+	# Track which teams get byes (odd team out)
+	var teams_with_byes: Array = []
+	
 	var match_count = 0
 	for i in range(0, team_count, 2):
 		if i + 1 < team_count:
@@ -130,6 +133,20 @@ func _setup_single_elimination():
 			new_match.bracket_position = match_count
 			current_tournament.matches.append(new_match)
 			match_count += 1
+		else:
+			# FIX: Store the team that has a bye
+			teams_with_byes.append(shuffled_teams[i])
+	
+	# FIX: Create "auto-win" matches for bye teams
+	for bye_team in teams_with_byes:
+		var match_id = "R1_M%d_BYE" % match_count
+		var bye_match = Match.new(match_id, bye_team, null, 1)
+		bye_match.bracket_position = match_count
+		bye_match.status = MatchStatus.COMPLETED  # Auto-complete
+		bye_match.winner = bye_team
+		current_tournament.matches.append(bye_match)
+		match_count += 1
+		print("Team %s gets a first-round bye" % bye_team.team_name)
 	
 	current_tournament.current_round = 1
 
@@ -243,7 +260,15 @@ func _advance_single_elimination():
 		if match_item.round_number == current_tournament.current_round and match_item.status == MatchStatus.COMPLETED:
 			winners.append(match_item.winner)
 	
-	if winners.size() <= 1:
+	# FIX: Don't complete tournament if we have winners to advance
+	if winners.is_empty():
+		print("Warning: No winners found in round %d" % current_tournament.current_round)
+		_complete_tournament()
+		return
+	
+	# FIX: If only one winner, they win the tournament
+	if winners.size() == 1:
+		print("Only one team remaining - tournament complete!")
 		_complete_tournament()
 		return
 	
@@ -252,6 +277,7 @@ func _advance_single_elimination():
 	var next_round = current_tournament.current_round
 	var match_count = 0
 	
+	# FIX: Handle odd number of winners (byes in later rounds)
 	for i in range(0, winners.size(), 2):
 		if i + 1 < winners.size():
 			var match_id = "R%d_M%d" % [next_round, match_count]
@@ -264,6 +290,16 @@ func _advance_single_elimination():
 			
 			current_tournament.matches.append(new_match)
 			match_count += 1
+		else:
+			# FIX: Last team gets a bye to the next round
+			var match_id = "R%d_M%d_BYE" % [next_round, match_count]
+			var bye_match = Match.new(match_id, winners[i], null, next_round)
+			bye_match.bracket_position = match_count
+			bye_match.status = MatchStatus.COMPLETED
+			bye_match.winner = winners[i]
+			current_tournament.matches.append(bye_match)
+			match_count += 1
+			print("Team %s gets a bye in round %d" % [winners[i].team_name, next_round])
 
 # Complete round robin
 func _complete_round_robin():

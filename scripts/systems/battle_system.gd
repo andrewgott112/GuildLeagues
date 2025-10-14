@@ -414,6 +414,17 @@ func _end_battle():
 		outcome_message = "Battle ended in a draw!"
 	
 	_log_message(outcome_message)
+	
+	# FIX: Restore original HP for all adventurers after battle
+	# This ensures battles don't cause permanent HP loss
+	for combatant in combatants:
+		if combatant.adventurer and combatant.original_hp > 0:
+			combatant.adventurer.hp = combatant.original_hp
+			_log_message("%s's HP restored to %d" % [combatant.name, combatant.original_hp])
+	
+	# TODO: Consider adding a healing/recovery system here instead
+	# For now, full restoration prevents permanent HP drain
+	
 	battle_finished.emit(result)
 
 func _log_message(message: String):

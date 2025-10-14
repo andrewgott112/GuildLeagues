@@ -240,6 +240,10 @@ func finish_playoffs_and_roll_season() -> void:
 	# Advance season (this emits season_completed signal internally)
 	var season_results = season_lifecycle.advance_season(all_rosters, contract_manager)
 	
+	# FIX: Call start_new_season() on all AI teams to reset stats and evolve personalities
+	for ai_team in ai_team_manager.ai_teams:
+		ai_team.start_new_season()
+	
 	# Update rosters based on expirations
 	var contract_expirations = season_results.contract_expirations
 	for contract in contract_expirations.expired_contracts:
@@ -252,16 +256,13 @@ func finish_playoffs_and_roll_season() -> void:
 	draft_done_for_season = false
 	playoffs_done_for_season = false
 	
-	# FIX #2: REMOVED duplicate signal emission
-	# The signal is already emitted by season_lifecycle.advance_season()
-	# and re-broadcast by _on_season_completed() handler below
-	
 	print("[Game] ===== SEASON %d COMPLETE =====" % (season - 1))
 	print("[Game] Player losses: %d, AI losses: %d, New FAs: %d" % [
 		contract_expirations.player_losses.size(),
 		contract_expirations.ai_losses.size(),
 		contract_manager.free_agent_pool.size()
 	])
+	print("[Game] AI teams refreshed: %d teams reset for new season" % ai_team_manager.ai_teams.size())
 	
 	goto(Phase.GUILD)
 
