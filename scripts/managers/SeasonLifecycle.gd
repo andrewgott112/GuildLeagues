@@ -19,11 +19,28 @@ var season_stats: Dictionary = {
 }
 
 # Historical tracking
-var season_results: Dictionary = {}  # season_number -> results dict
-
-# Character lifecycle tracking
+var season_results: Dictionary = {}
 var retired_characters: Array = []
 var deceased_characters: Array = []
+
+func initialize_season_summary() -> void:
+	"""
+	Initialize the current season's result record.
+	Call this when playoffs BEGIN, before any champion data is set.
+	"""
+	if not season_results.has(current_season):
+		season_results[current_season] = {
+			"season": current_season,
+			"champion": "",
+			"player_champion": false,
+			"player_performance": "",
+			"stats": season_stats.duplicate(),
+			"character_lifecycle": {},
+			"contract_expirations": {}
+		}
+		print("[SeasonLifecycle] Initialized season %d summary" % current_season)
+	else:
+		print("[SeasonLifecycle] Season %d summary already exists" % current_season)
 
 func finalize_season_results() -> void:
 	"""
@@ -36,6 +53,8 @@ func finalize_season_results() -> void:
 		if current_result.player_performance == "":
 			current_result.player_performance = season_stats.playoff_performance
 		print("[SeasonLifecycle] Season %d results finalized" % current_season)
+	else:
+		push_error("[SeasonLifecycle] Cannot finalize - no season result exists for season %d!" % current_season)
 
 func set_champion_info(champion_team_name: String, is_player: bool) -> void:
 	"""Set the season champion before finalizing results"""
@@ -45,7 +64,7 @@ func set_champion_info(champion_team_name: String, is_player: bool) -> void:
 		current_result.player_champion = is_player
 		print("[SeasonLifecycle] Champion recorded: %s (Player: %s)" % [champion_team_name, is_player])
 	else:
-		push_warning("[SeasonLifecycle] Attempted to set champion but no season result exists for season %d" % current_season)
+		push_error("[SeasonLifecycle] Cannot set champion - no season result exists for season %d!" % current_season)
 
 func advance_to_phase(new_phase: int) -> void:
 	"""Change current phase"""
@@ -57,52 +76,48 @@ func advance_to_phase(new_phase: int) -> void:
 func advance_season(rosters: Array, contract_manager: ContractManager) -> Dictionary:
 	"""
 	Advance to next season with full processing.
-	rosters: Array of all character arrays (player + AI teams)
-	contract_manager: ContractManager reference for handling contract terminations
 	Returns: complete season results
 	
-	NOTE: Champion info should already be set via set_champion_info() 
-		  and finalize_season_results() before calling this method!
+	NOTE: Champion info should already be set via initialize_season_summary(),
+		  set_champion_info(), and finalize_season_results() before calling this!
 	"""
 	print("[SeasonLifecycle] ===== ADVANCING TO SEASON %d =====" % (current_season + 1))
 	
 	# Get the current season result (should already exist with champion data)
 	var season_result = season_results.get(current_season)
 	
-	# 1. Process character aging/lifecycle (NOW with contract termination)
-	var aging_results = _process_character_aging(rosters, contract_manager)
-	
-	# 2. Process contract expirations
-	var contract_results = contract_manager.process_contract_expirations()
-	
-	# 3. Update season results with final data
-	if season_result:
-		# Merge in the lifecycle and contract data
-		season_result.character_lifecycle = aging_results
-		season_result.contract_expirations = contract_results
-		print("[SeasonLifecycle] Updated existing season %d result" % current_season)
-	else:
-		# Fallback: create new result if somehow it doesn't exist
-		push_warning("[SeasonLifecycle] No pre-existing season result! Creating one now.")
+	if not season_result:
+		push_error("[SeasonLifecycle] CRITICAL: No season result for season %d! Did you forget to call initialize_season_summary()?" % current_season)
+		# Create emergency fallback
 		season_result = {
 			"season": current_season,
 			"champion": "Unknown",
 			"player_champion": false,
 			"player_performance": season_stats.get("playoff_performance", "Unknown"),
 			"stats": season_stats.duplicate(),
-			"character_lifecycle": aging_results,
-			"contract_expirations": contract_results
+			"character_lifecycle": {},
+			"contract_expirations": {}
 		}
 		season_results[current_season] = season_result
 	
+	# 1. Process character aging/lifecycle
+	var aging_results = _process_character_aging(rosters, contract_manager)
+	
+	# 2. Process contract expirations
+	var contract_results = contract_manager.process_contract_expirations()
+	
+	# 3. Update season results with final data
+	season_result.character_lifecycle = aging_results
+	season_result.contract_expirations = contract_results
+	
 	# Validate champion was set
-	if season_result.champion == "":
-		push_warning("[SeasonLifecycle] Champion was never set for season %d!" % current_season)
+	if season_result.champion == "" or season_result.champion == "Unknown":
+		push_warning("[SeasonLifecycle] Champion was never properly set for season %d!" % current_season)
 	
 	# 4. Increment season
 	current_season += 1
 	
-	# 5. Reset season stats
+	# 5. Reset season stats for new season
 	season_stats = {
 		"dungeons_completed": 0,
 		"total_gold_earned": 0,

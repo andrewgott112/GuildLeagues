@@ -237,7 +237,7 @@ func finish_playoffs_and_roll_season() -> void:
 	for ai_team in ai_team_manager.ai_teams:
 		all_rosters.append(ai_team.roster)
 	
-	# Advance season (processes aging and contracts)
+	# Advance season (this emits season_completed signal internally)
 	var season_results = season_lifecycle.advance_season(all_rosters, contract_manager)
 	
 	# Update rosters based on expirations
@@ -252,7 +252,9 @@ func finish_playoffs_and_roll_season() -> void:
 	draft_done_for_season = false
 	playoffs_done_for_season = false
 	
-	emit_signal("season_completed", season_results)
+	# FIX #2: REMOVED duplicate signal emission
+	# The signal is already emitted by season_lifecycle.advance_season()
+	# and re-broadcast by _on_season_completed() handler below
 	
 	print("[Game] ===== SEASON %d COMPLETE =====" % (season - 1))
 	print("[Game] Player losses: %d, AI losses: %d, New FAs: %d" % [
@@ -276,11 +278,12 @@ func _start_playoffs():
 	# Ensure AI teams have rosters
 	for ai_team in ai_team_manager.ai_teams:
 		if ai_team.roster.is_empty():
-			# Emergency fallback
 			ai_team.roster = ai_team_manager.generate_emergency_roster()
 	
 	# Create player team
 	create_player_team()
+	
+	season_lifecycle.initialize_season_summary()
 	
 	# Create tournament
 	var all_teams = ai_team_manager.get_all_teams_with_player(player_team)
@@ -397,6 +400,10 @@ func _on_season_changed(new_season):
 	emit_signal("season_changed", new_season)
 
 func _on_season_completed(results):
+	"""
+	Handle season completion from SeasonLifecycle.
+	This re-broadcasts to Game's listeners (like GuildScreen).
+	"""
 	emit_signal("season_completed", results)
 
 # Playoff signals
@@ -417,7 +424,8 @@ func _on_tournament_completed(final_result: Dictionary):
 	# Extract champion info
 	var champion = final_result.get("champion")
 	if champion:
-		var champion_name = champion.team_name if champion.has("team_name") else "Unknown"
+		# Champion is a Team object - access team_name directly
+		var champion_name = champion.team_name
 		var is_player_champion = (champion == player_team)
 		
 		# Record champion in season lifecycle BEFORE advancing season

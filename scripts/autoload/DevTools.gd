@@ -10,6 +10,8 @@
 
 extends Node
 
+const RoleResource = preload("res://resources/Role.gd")
+
 # Dev mode toggle
 var dev_mode_enabled: bool = true  # Set to false for production builds
 var dev_panel_visible: bool = false
@@ -444,9 +446,10 @@ func simulate_draft():
 		"res://data/roles/damage_role.tres"
 	]
 	
-	var roles = []
+	# FIX: Properly type the array
+	var roles: Array[RoleResource] = []
 	for role_path in role_files:
-		var role = load(role_path)
+		var role = load(role_path) as RoleResource
 		if role:
 			roles.append(role)
 	
@@ -513,9 +516,10 @@ func add_random_character():
 		"res://data/roles/damage_role.tres"
 	]
 	
-	var roles = []
+	# FIX: Properly type the array
+	var roles: Array[RoleResource] = []
 	for role_path in role_files:
-		var role = load(role_path)
+		var role = load(role_path) as RoleResource
 		if role:
 			roles.append(role)
 	
