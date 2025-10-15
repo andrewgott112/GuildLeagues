@@ -426,11 +426,11 @@ func get_tournament_standings() -> Array:
 		})
 	
 	# Sort by wins, then by win rate
-	standings.sort_custom(func(a, b): 
-		if a.wins != b.wins:
-			return a.wins > b.wins
-		return a.win_rate > b.win_rate
-	)
+		standings.sort_custom(func(a, b):
+			if a["wins"] != b["wins"]:
+				return a["wins"] > b["wins"]
+			return a["win_rate"] > b["win_rate"]
+		)
 	
 	return standings
 

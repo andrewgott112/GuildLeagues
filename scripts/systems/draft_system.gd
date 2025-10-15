@@ -12,23 +12,24 @@ class DraftState:
 
 func make_linear_order(num_teams: int, rounds: int) -> Array[int]:
 	var order: Array[int] = []
-	for r in rounds:
-		for t in num_teams:
-			order.append(t) # 0..num_teams-1
+	for _round in range(rounds):
+		for team_index in range(num_teams):
+			order.append(team_index) # 0..num_teams-1
 	return order
 
 func make_snake_order(num_teams: int, rounds: int) -> Array[int]:
 	var order: Array[int] = []
 	var forward := true
-	for r in rounds:
+	for _round in range(rounds):
 		if forward:
-			for t in num_teams:
-				order.append(t)
+			for team_index in range(num_teams):
+				order.append(team_index)
 		else:
-			for t in range(num_teams - 1, -1, -1):
-				order.append(t)
+			for team_index in range(num_teams - 1, -1, -1):
+				order.append(team_index)
 		forward = !forward
 	return order
+
 
 func create_draft_state(prospects: Array, team_names: Array[String], rounds := 3, snake := false) -> DraftState:
 	var s := DraftState.new()
@@ -68,8 +69,8 @@ func ai_choose_index(state: DraftState, team_i: int) -> int:
 	var best_score: float = -INF
 	var best_idx: int = 0
 
-	for i in state.prospects.size():
-		var a = state.prospects[i]
+	for prospect_index in range(state.prospects.size()):
+		var a = state.prospects[prospect_index]
 		var role_name: String = a.role.display_name  # <-- typed
 
 		var score: float = a.attack * 1.0 + a.defense * 0.8 + a.hp * 0.3 + a.role_stat * 0.6 \
@@ -78,7 +79,8 @@ func ai_choose_index(state: DraftState, team_i: int) -> int:
 		score += float(need_bias.get(role_name, 0.0))
 		if score > best_score:
 			best_score = score
-			best_idx = i
+			best_idx = prospect_index
+	
 	return best_idx
 
 

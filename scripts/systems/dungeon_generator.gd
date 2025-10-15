@@ -135,10 +135,10 @@ func _place_special_rooms(dungeon: DungeonResource):
 		placed_objects.append(exit_tile.position)
 	
 	# Place treasure rooms with good spacing
-	var treasure_count = mini(dungeon.max_treasure_rooms, empty_tiles.size() / 4)
-	for i in treasure_count:
-		if empty_tiles.is_empty():
-			break
+		var treasure_count = min(dungeon.max_treasure_rooms, empty_tiles.size() / 4)
+		for _treasure_index in range(treasure_count):
+			if empty_tiles.is_empty():
+				break
 		
 		var treasure_tile = _find_well_spaced_tile(empty_tiles, placed_objects, 4.0)
 		if treasure_tile:
@@ -148,10 +148,10 @@ func _place_special_rooms(dungeon: DungeonResource):
 			placed_objects.append(treasure_tile.position)
 	
 	# Place monster rooms with good spacing
-	var monster_count = mini(dungeon.max_monster_rooms, empty_tiles.size() / 3)
-	for i in monster_count:
-		if empty_tiles.is_empty():
-			break
+		var monster_count = min(dungeon.max_monster_rooms, empty_tiles.size() / 3)
+		for _monster_index in range(monster_count):
+			if empty_tiles.is_empty():
+				break
 		
 		var monster_tile = _find_well_spaced_tile(empty_tiles, placed_objects, 3.0)
 		if monster_tile:
@@ -191,7 +191,7 @@ func _find_well_spaced_tile(empty_tiles: Array, placed_positions: Array, min_dis
 	var best_tile = null
 	var best_min_distance = 0.0
 	var attempts = 0
-	var max_attempts = mini(50, empty_tiles.size())
+	var max_attempts = min(50, empty_tiles.size())
 	
 	# Try to find a well-spaced tile
 	while attempts < max_attempts:
@@ -233,7 +233,7 @@ func _get_min_distance_to_positions(pos: Vector2i, positions: Array) -> float:
 	
 	var min_distance = INF
 	for other_pos in positions:
-		var distance = pos.distance_to(Vector2(other_pos))
-		min_distance = mini(min_distance, distance)
-	
+		var distance = pos.distance_to(other_pos)
+		min_distance = min(min_distance, distance)
+
 	return min_distance

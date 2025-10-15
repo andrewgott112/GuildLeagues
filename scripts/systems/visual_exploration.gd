@@ -483,8 +483,8 @@ func _find_unexplored_areas():
 				exploration_targets.append(tile.position)
 
 func _find_any_unvisited_areas():
-	for y in dungeon.height:
-		for x in dungeon.width:
+	for y in range(dungeon.height):
+		for x in range(dungeon.width):
 			var pos = Vector2i(x, y)
 			if pos in visited_tiles or pos in retreated_tiles:
 				continue
@@ -533,7 +533,7 @@ func _choose_best_target() -> Vector2i:
 			continue
 		
 		var score = 0.0
-		var distance = party_position.distance_to(Vector2(target))
+		var distance = Vector2(party_position).distance_to(Vector2(target))
 		
 		# If heading to exit, prioritize exit heavily
 		if decided_to_exit and tile.tile_type == DungeonTileResource.EXIT:
@@ -671,7 +671,7 @@ func _calculate_move_score(pos: Vector2i, target: Vector2i, recent_positions: Ar
 	var score = 0.0
 	
 	# Distance to target (primary factor)
-	var distance = pos.distance_to(Vector2(target))
+	var distance = Vector2(pos).distance_to(Vector2(target))
 	score = 100.0 - distance * 10.0  # Closer is much better
 	
 	# Heavily penalize recently visited positions
@@ -705,7 +705,7 @@ func _find_non_oscillating_move(from: Vector2i, target: Vector2i, recent_positio
 		if recent_positions.size() >= 2 and test_pos == recent_positions[-2]:
 			continue
 		
-		var distance = test_pos.distance_to(Vector2(target))
+		var distance = Vector2(test_pos).distance_to(Vector2(target))
 		valid_moves.append({"pos": test_pos, "distance": distance})
 	
 	if valid_moves.is_empty():
